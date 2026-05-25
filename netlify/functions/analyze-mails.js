@@ -4,9 +4,10 @@ exports.handler = async (event) => {
   }
 
   try {
-    const { mails } = JSON.parse(event.body);
+    const body = JSON.parse(event.body);
+    const mails = body.mails || [];
 
-    if (!mails || mails.length === 0) {
+    if (mails.length === 0) {
       return {
         statusCode: 200,
         headers: { "Content-Type": "application/json" },
@@ -14,50 +15,45 @@ exports.handler = async (event) => {
       };
     }
 
+    // Only send first 5 mails to keep payload small
+    const sample = mails.slice(0, 5).map(m => ({
+      id: m.id,
+      betreff: m.betreff,
+      absender: m.absender,
+      datum: m.datum,
+      text: (m.text || "").slice(0, 200)
+    }));
+
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set");
+
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY,
+        "x-api-key": apiKey,
         "anthropic-version": "2023-06-01"
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 4000,
-        system: `Du analysierst E-Mails einer Physiotherapiepraxis (PhysioPro Lübeck) und extrahierst daraus konkrete Aufgaben/Todos.
-
-Antworte NUR mit einem JSON-Array, ohne Markdown-Backticks, ohne Präambel:
-[
-  {
-    "id": "exakte-mail-id-aus-der-eingabe",
-    "aufgabe": "Kurze klare Aufgabe im Imperativ (max 70 Zeichen)",
-    "vorschau": "1-2 Sätze Kontext (max 120 Zeichen)",
-    "details": "Vollständiger Kontext aus der Mail (max 300 Zeichen)",
-    "absender": "absender@example.de",
-    "datum": "2025-05-25",
-    "prioritaet": "hoch|mittel|niedrig",
-    "kategorie": "Termin|Patient|Rechnung|Krankenversicherung|Anfrage|Personal|Lieferung|Sonstiges"
-  }
-]
-
-Prioritäten: hoch=zeitkritisch/Beschwerden/heute, mittel=Terminanfragen/normale Anfragen, niedrig=allgemeine Infos.
-Nur Mails die eine Aktion erfordern ausgeben. Automatische Bestätigungen, Newsletter, Spam weglassen.
-Falls keine Todo-Mails: gib [] zurück.`,
-        messages: [
-          {
-            role: "user",
-            content: `Analysiere diese ${mails.length} E-Mails:\n\n${JSON.stringify(mails, null, 2)}`
-          }
-        ]
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 2000,
+        system: `Du analysierst E-Mails einer Physiotherapiepraxis und extrahierst Todos.
+Antworte NUR mit einem JSON-Array ohne Markdown:
+[{"id":"mail-id","aufgabe":"Was tun (max 70 Zeichen)","vorschau":"Kurzer Kontext","details":"Details","absender":"email","datum":"2025-01-01","prioritaet":"hoch|mittel|niedrig","kategorie":"Termin|Patient|Rechnung|Anfrage|Personal|Sonstiges"}]
+Nur Mails die eine Aktion erfordern. Kein Newsletter/Spam. Falls keine: [].`,
+        messages: [{
+          role: "user",
+          content: `Analysiere: ${JSON.stringify(sample)}`
+        }]
       })
     });
 
+    const responseText = await response.text();
     if (!response.ok) {
-      const err = await response.text();
-      throw new Error(`Anthropic API ${response.status}: ${err}`);
+      throw new Error(`Anthropic ${response.status}: ${responseText.slice(0, 200)}`);
     }
 
-    const data = await response.json();
+    const data = JSON.parse(responseText);
     const text = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || "[]";
 
     let todos = [];
@@ -66,7 +62,7 @@ Falls keine Todo-Mails: gib [] zurück.`,
       const match = cleaned.match(/\[[\s\S]*\]/);
       if (match) todos = JSON.parse(match[0]);
     } catch (e) {
-      console.error("Parse error:", e, "Raw:", text);
+      console.error("Parse error:", e.message, "Raw:", text.slice(0, 200));
     }
 
     return {
@@ -76,11 +72,11 @@ Falls keine Todo-Mails: gib [] zurück.`,
     };
 
   } catch (e) {
-    console.error("analyze-mails error:", e);
+    console.error("FUNCTION ERROR:", e.message);
     return {
       statusCode: 500,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ error: e.message })
+      body: JSON.stringify({ error: e.message, stack: e.stack?.slice(0, 300) })
     };
   }
 };
