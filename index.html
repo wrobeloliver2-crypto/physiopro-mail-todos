@@ -454,8 +454,9 @@ async function loadMails() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ mails: simplified })
     });
-    if (!analyzeRes.ok) throw new Error("Analyse-Fehler " + analyzeRes.status);
-    const { todos } = await analyzeRes.json();
+    const analyzeBody = await analyzeRes.json();
+    if (!analyzeRes.ok) throw new Error("Analyse-Fehler " + analyzeRes.status + ": " + (analyzeBody.error || ""));
+    const { todos } = analyzeBody;
 
     allTodos = todos.map(t => {
       const mail = mails.find(m => m.id === t.id);
@@ -1083,8 +1084,9 @@ async function loadMails() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ mails: simplified })
     });
-    if (!analyzeRes.ok) throw new Error("Analyse-Fehler " + analyzeRes.status);
-    const { todos } = await analyzeRes.json();
+    const analyzeBody = await analyzeRes.json();
+    if (!analyzeRes.ok) throw new Error("Analyse-Fehler " + analyzeRes.status + ": " + (analyzeBody.error || ""));
+    const { todos } = analyzeBody;
 
     // Map existing Outlook categories to status
     allTodos = todos.map(t => {
