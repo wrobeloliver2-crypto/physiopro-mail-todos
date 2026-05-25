@@ -15,17 +15,17 @@ exports.handler = async (event) => {
       };
     }
 
-    // Only send first 5 mails to keep payload small
-    const sample = mails.slice(0, 5).map(m => ({
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set");
+
+    // Trim payload: max 80 mails, max 300 chars per body
+    const sample = mails.slice(0, 80).map(m => ({
       id: m.id,
       betreff: m.betreff,
       absender: m.absender,
       datum: m.datum,
-      text: (m.text || "").slice(0, 200)
+      text: (m.text || "").slice(0, 300)
     }));
-
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set");
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -36,21 +36,23 @@ exports.handler = async (event) => {
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
-        max_tokens: 2000,
-        system: `Du analysierst E-Mails einer Physiotherapiepraxis und extrahierst Todos.
-Antworte NUR mit einem JSON-Array ohne Markdown:
-[{"id":"mail-id","aufgabe":"Was tun (max 70 Zeichen)","vorschau":"Kurzer Kontext","details":"Details","absender":"email","datum":"2025-01-01","prioritaet":"hoch|mittel|niedrig","kategorie":"Termin|Patient|Rechnung|Anfrage|Personal|Sonstiges"}]
-Nur Mails die eine Aktion erfordern. Kein Newsletter/Spam. Falls keine: [].`,
+        max_tokens: 4000,
+        system: `Du analysierst E-Mails einer Physiotherapiepraxis (PhysioPro Lübeck) und extrahierst daraus konkrete Aufgaben/Todos.
+Antworte NUR mit einem JSON-Array ohne Markdown-Backticks, ohne Präambel:
+[{"id":"exakte-mail-id","aufgabe":"Was tun im Imperativ (max 70 Zeichen)","vorschau":"1-2 Sätze Kontext (max 120 Zeichen)","details":"Vollständiger Kontext (max 300 Zeichen)","absender":"email@example.de","datum":"2025-01-01","prioritaet":"hoch|mittel|niedrig","kategorie":"Termin|Patient|Rechnung|Krankenversicherung|Anfrage|Personal|Lieferung|Sonstiges"}]
+Prioritäten: hoch=zeitkritisch/heute/Beschwerden, mittel=Terminanfragen/normale Anfragen, niedrig=allgemeine Infos.
+NUR Mails ausgeben die eine Aktion erfordern. Automatische Bestätigungen, Newsletter, Spam weglassen.
+Falls keine Todo-Mails vorhanden: gib [] zurück.`,
         messages: [{
           role: "user",
-          content: `Analysiere: ${JSON.stringify(sample)}`
+          content: `Analysiere diese ${sample.length} E-Mails:\n${JSON.stringify(sample)}`
         }]
       })
     });
 
     const responseText = await response.text();
     if (!response.ok) {
-      throw new Error(`Anthropic ${response.status}: ${responseText.slice(0, 200)}`);
+      throw new Error(`Anthropic ${response.status}: ${responseText.slice(0, 300)}`);
     }
 
     const data = JSON.parse(responseText);
@@ -62,7 +64,7 @@ Nur Mails die eine Aktion erfordern. Kein Newsletter/Spam. Falls keine: [].`,
       const match = cleaned.match(/\[[\s\S]*\]/);
       if (match) todos = JSON.parse(match[0]);
     } catch (e) {
-      console.error("Parse error:", e.message, "Raw:", text.slice(0, 200));
+      console.error("Parse error:", e.message, "Raw:", text.slice(0, 300));
     }
 
     return {
@@ -76,7 +78,7 @@ Nur Mails die eine Aktion erfordern. Kein Newsletter/Spam. Falls keine: [].`,
     return {
       statusCode: 500,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ error: e.message, stack: e.stack?.slice(0, 300) })
+      body: JSON.stringify({ error: e.message })
     };
   }
 };
