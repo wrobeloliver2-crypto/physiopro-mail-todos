@@ -415,9 +415,11 @@ async function loadMails() {
     currentToken = await getToken();
 
     loadingText.textContent = "Lade E-Mails aus Outlook…";
+    // 14 days back
+    const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
     const mailRes = await fetch(
       "https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages" +
-      "?$top=30&$select=id,subject,from,receivedDateTime,bodyPreview,categories&$orderby=receivedDateTime desc",
+      `?$top=100&$select=id,subject,from,receivedDateTime,bodyPreview,categories&$orderby=receivedDateTime desc&$filter=receivedDateTime ge ${since}`,
       { headers: { Authorization: "Bearer " + currentToken } }
     );
     if (!mailRes.ok) throw new Error("Graph API Fehler " + mailRes.status);
