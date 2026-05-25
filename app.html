@@ -424,12 +424,7 @@ async function loadMails() {
     );
     if (!mailRes.ok) throw new Error("Graph API Fehler " + mailRes.status);
     const mailData = await mailRes.json();
-    const allMails = mailData.value || [];
-    const mails = allMails.filter(m => new Date(m.receivedDateTime) >= since);
-    alert("Account: " + document.getElementById("user-email").textContent + "
-Alle Mails: " + allMails.length + "
-Letzte 14 Tage: " + mails.length + "
-Älteste Mail: " + (allMails[allMails.length-1]?.receivedDateTime||"?").slice(0,10));
+    const mails = (mailData.value || []).filter(m => new Date(m.receivedDateTime) >= since);
 
     if (mails.length === 0) {
       loading.classList.remove("visible");
@@ -1047,12 +1042,7 @@ async function loadMails() {
     );
     if (!mailRes.ok) throw new Error("Graph API Fehler " + mailRes.status);
     const mailData = await mailRes.json();
-    const allMails = mailData.value || [];
-    const mails = allMails.filter(m => new Date(m.receivedDateTime) >= since);
-    alert("Account: " + document.getElementById("user-email").textContent + "
-Alle Mails: " + allMails.length + "
-Letzte 14 Tage: " + mails.length + "
-Älteste Mail: " + (allMails[allMails.length-1]?.receivedDateTime||"?").slice(0,10));
+    const mails = (mailData.value || []).filter(m => new Date(m.receivedDateTime) >= since);
 
     if (mails.length === 0) {
       loading.classList.remove("visible");
