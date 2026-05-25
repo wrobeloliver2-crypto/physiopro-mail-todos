@@ -35,7 +35,7 @@ exports.handler = async (event) => {
         "anthropic-version": "2023-06-01"
       },
       body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
+        model: "claude-sonnet-4-20250514",
         max_tokens: 2000,
         system: `Du analysierst E-Mails einer Physiotherapiepraxis und extrahierst Todos.
 Antworte NUR mit einem JSON-Array ohne Markdown:
