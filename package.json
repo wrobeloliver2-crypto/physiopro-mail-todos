@@ -1,0 +1,8 @@
+{
+  "name": "physiopro-mail-todos",
+  "version": "1.0.0",
+  "description": "PhysioPro Mail Todo App",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.24.0"
+  }
+}
