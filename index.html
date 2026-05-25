@@ -440,14 +440,16 @@ async function loadMails() {
     }
 
     loadingText.textContent = "KI analysiert Mails auf Todos…";
-    const simplified = mails.map(m => ({
+    const simplified = mails.slice(0, 50).map(m => ({
       id: m.id,
-      betreff: m.subject,
+      betreff: m.subject || "(kein Betreff)",
       absender: m.from?.emailAddress?.address || "",
       datum: m.receivedDateTime?.split("T")[0] || "",
-      text: m.bodyPreview || "",
+      text: (m.bodyPreview || "").slice(0, 400),
       kategorien: m.categories || []
     }));
+
+    loadingText.textContent = `KI analysiert ${simplified.length} Mails auf Todos…`;
 
     const analyzeRes = await fetch("/.netlify/functions/analyze-mails", {
       method: "POST",
