@@ -424,10 +424,7 @@ async function loadMails() {
     );
     if (!mailRes.ok) throw new Error("Graph API Fehler " + mailRes.status);
     const mailData = await mailRes.json();
-    const allMails = mailData.value || [];
-    const mails = allMails.filter(m => new Date(m.receivedDateTime) >= since);
-    alert("Eingeloggt als: " + document.getElementById("user-email").textContent + "
-" + allMails.length + " Mails gesamt, " + mails.length + " in 14 Tagen");
+    const mails = (mailData.value || []).filter(m => new Date(m.receivedDateTime) >= since);
 
     if (mails.length === 0) {
       loading.classList.remove("visible");
@@ -1045,10 +1042,7 @@ async function loadMails() {
     );
     if (!mailRes.ok) throw new Error("Graph API Fehler " + mailRes.status);
     const mailData = await mailRes.json();
-    const allMails = mailData.value || [];
-    const mails = allMails.filter(m => new Date(m.receivedDateTime) >= since);
-    alert("Eingeloggt als: " + document.getElementById("user-email").textContent + "
-" + allMails.length + " Mails gesamt, " + mails.length + " in 14 Tagen");
+    const mails = (mailData.value || []).filter(m => new Date(m.receivedDateTime) >= since);
 
     if (mails.length === 0) {
       loading.classList.remove("visible");
