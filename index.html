@@ -415,16 +415,18 @@ async function loadMails() {
     currentToken = await getToken();
 
     loadingText.textContent = "Lade E-Mails aus Outlook…";
-    // 14 days back
-    const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+    // 14 days back — filter client-side to avoid Graph API $filter+$orderby conflict
+    const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
     const mailRes = await fetch(
       "https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages" +
-      `?$top=100&$select=id,subject,from,receivedDateTime,bodyPreview,categories&$orderby=receivedDateTime desc&$filter=receivedDateTime ge ${since}`,
+      "?$top=100&$select=id,subject,from,receivedDateTime,bodyPreview,categories&$orderby=receivedDateTime desc",
       { headers: { Authorization: "Bearer " + currentToken } }
     );
     if (!mailRes.ok) throw new Error("Graph API Fehler " + mailRes.status);
     const mailData = await mailRes.json();
-    const mails = mailData.value || [];
+    const mails = (mailData.value || []).filter(m =>
+      new Date(m.receivedDateTime) >= since
+    );
 
     if (mails.length === 0) {
       loading.classList.remove("visible");
@@ -1039,7 +1041,9 @@ async function loadMails() {
     );
     if (!mailRes.ok) throw new Error("Graph API Fehler " + mailRes.status);
     const mailData = await mailRes.json();
-    const mails = mailData.value || [];
+    const mails = (mailData.value || []).filter(m =>
+      new Date(m.receivedDateTime) >= since
+    );
 
     if (mails.length === 0) {
       loading.classList.remove("visible");
