@@ -424,10 +424,7 @@ async function loadMails() {
     );
     if (!mailRes.ok) throw new Error("Graph API Fehler " + mailRes.status);
     const mailData = await mailRes.json();
-    const allFetched = mailData.value || [];
-    const mails = allFetched.filter(m => new Date(m.receivedDateTime) >= since);
-    console.log("Graph API:", allFetched.length, "Mails total,", mails.length, "in 14 Tagen");
-    alert("Graph API: " + allFetched.length + " Mails geladen, " + mails.length + " in letzten 14 Tagen");
+    const mails = (mailData.value || []).filter(m => new Date(m.receivedDateTime) >= since);
 
     if (mails.length === 0) {
       loading.classList.remove("visible");
@@ -441,7 +438,7 @@ async function loadMails() {
     }
 
     loadingText.textContent = "KI analysiert Mails auf Todos…";
-    const simplified = mails.slice(0, 50).map(m => ({
+    const simplified = mails.map(m => ({
       id: m.id,
       betreff: m.subject || "(kein Betreff)",
       absender: m.from?.emailAddress?.address || "",
@@ -1045,10 +1042,7 @@ async function loadMails() {
     );
     if (!mailRes.ok) throw new Error("Graph API Fehler " + mailRes.status);
     const mailData = await mailRes.json();
-    const allFetched = mailData.value || [];
-    const mails = allFetched.filter(m => new Date(m.receivedDateTime) >= since);
-    console.log("Graph API:", allFetched.length, "Mails total,", mails.length, "in 14 Tagen");
-    alert("Graph API: " + allFetched.length + " Mails geladen, " + mails.length + " in letzten 14 Tagen");
+    const mails = (mailData.value || []).filter(m => new Date(m.receivedDateTime) >= since);
 
     if (mails.length === 0) {
       loading.classList.remove("visible");
