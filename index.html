@@ -348,10 +348,15 @@ const SCOPES = ["Mail.Read", "Mail.ReadWrite"];
 let currentToken = null;
 let allTodos = [];
 let activeFilter = "all";
+let msalReady = false;
 
 // ── AUTH ─────────────────────────────────────────────────────────────────────
 async function signIn() {
   try {
+    if (!msalReady) {
+      await msalInstance.initialize();
+      msalReady = true;
+    }
     const result = await msalInstance.loginPopup({ scopes: SCOPES });
     msalInstance.setActiveAccount(result.account);
     await initApp(result.account);
@@ -636,6 +641,7 @@ function escHtml(s) {
 // ── INIT ──────────────────────────────────────────────────────────────────────
 (async () => {
   await msalInstance.initialize();
+  msalReady = true;
   const accounts = msalInstance.getAllAccounts();
   if (accounts.length > 0) {
     msalInstance.setActiveAccount(accounts[0]);
