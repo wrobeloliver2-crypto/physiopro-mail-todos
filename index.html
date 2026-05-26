@@ -64,6 +64,7 @@
     .date-badge { font-size: 10px; color: var(--muted); margin-left: auto; }
     .count-badge { font-size: 10px; font-weight: 700; background: var(--dark); color: white; border-radius: 10px; padding: 2px 7px; }
     .reply-hint { font-size: 10px; font-weight: 600; color: #1a3a6a; background: #eef4fd; border-radius: 4px; padding: 2px 7px; }
+    .replied-badge { font-size: 10px; font-weight: 600; color: #2a6a2a; background: #e8f5e8; border-radius: 4px; padding: 2px 7px; border: 1px solid #9acaaa; }
     .card-task { font-size: 14px; font-weight: 600; color: var(--dark); line-height: 1.4; margin-bottom: 6px; }
     .card-preview { font-size: 12px; color: var(--muted); line-height: 1.5; margin-bottom: 8px; }
     .card-details-inline { font-size: 12px; color: var(--text); line-height: 1.6; background: var(--sand); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; border-left: 3px solid var(--green); display: none; }
@@ -257,6 +258,23 @@ async function loadMails() {
       webLink: m.webLink || ""
     }));
 
+    // Fetch sent items to detect already-replied mails
+    loadingText.textContent = "Prüfe gesendete Antworten…";
+    let repliedSubjects = new Set();
+    try {
+      const sentR = await fetch(
+        "https://graph.microsoft.com/v1.0/me/mailFolders/sentitems/messages?$top=100&$select=subject,sentDateTime&$orderby=sentDateTime desc",
+        { headers: { Authorization: "Bearer " + token } }
+      );
+      if (sentR.ok) {
+        const sentData = await sentR.json();
+        (sentData.value || []).forEach(m => {
+          const s = (m.subject || "").replace(/^(Re:|AW:|Fwd:|WG:)\s*/i, "").trim().toLowerCase();
+          repliedSubjects.add(s);
+        });
+      }
+    } catch(e) { console.warn("Sent-Ordner nicht abrufbar:", e.message); }
+
     // Process in batches of 10 – each batch is one API call to stay within timeout
     const BATCH_SIZE = 8;
     const batches = [];
@@ -289,7 +307,9 @@ async function loadMails() {
         let status = "todo";
         if (cats.some(c => c.includes("Arbeit"))) status = "progress";
         if (cats.some(c => c.includes("Erledigt"))) return null;
-        return { ...t, status, anzahl: t.anzahl || 1, original_betreff: mail?.subject || t.aufgabe, webLink: mail?.webLink || "" };
+        const subjectClean = (mail?.subject || "").replace(/^(Re:|AW:|Fwd:|WG:)\s*/i, "").trim().toLowerCase();
+        const alreadyReplied = repliedSubjects.has(subjectClean);
+        return { ...t, status, anzahl: t.anzahl || 1, original_betreff: mail?.subject || t.aufgabe, webLink: mail?.webLink || "", alreadyReplied };
       }).filter(Boolean);
 
       allTodos = [...allTodos, ...batchTodos];
@@ -355,6 +375,7 @@ function renderTodos() {
     const countBadge = t.anzahl > 1 ? `<span class="count-badge">${t.anzahl}×</span>` : "";
     const hasReply = t.antwort_betreff && t.antwort_text;
     const replyHint = hasReply ? `<span class="reply-hint">✉️ Antwort vorgeschlagen</span>` : "";
+    const repliedBadge = t.alreadyReplied ? `<span class="replied-badge">✅ Bereits beantwortet</span>` : "";
 
     // Reply block HTML
     const replyBlock = hasReply ? `
@@ -373,6 +394,7 @@ function renderTodos() {
           <span class="cat-badge">${esc(t.kategorie||"Sonstiges")}</span>
           ${countBadge}
           ${replyHint}
+          ${repliedBadge}
           <span class="date-badge">${date}</span>
         </div>
         <div class="card-task">${esc(t.aufgabe)}</div>
