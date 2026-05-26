@@ -489,6 +489,8 @@ function openMail(ev, btn) {
   window.open(url, "_blank");
 }
 
+const PCOLS = { hoch: "#e74c3c", mittel: "#f39c12", niedrig: "#55725e" };
+
 function renderTodos() {
   const grid = document.getElementById("todo-grid");
   const visible = allTodos.filter(t =>
