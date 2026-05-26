@@ -621,10 +621,18 @@ function escHtml(s) {
 // ── INIT ──────────────────────────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", async () => {
   try {
-    const inst = await getMsalInstance();
-    const accounts = inst.getAllAccounts();
+    await msalReady;
+    // Handle redirect response first
+    const result = await msalInstance.handleRedirectPromise();
+    if (result) {
+      msalInstance.setActiveAccount(result.account);
+      await initApp(result.account);
+      return;
+    }
+    // Check existing session
+    const accounts = msalInstance.getAllAccounts();
     if (accounts.length > 0) {
-      inst.setActiveAccount(accounts[0]);
+      msalInstance.setActiveAccount(accounts[0]);
       await initApp(accounts[0]);
     }
   } catch(e) {
@@ -981,9 +989,7 @@ const msalReady = msalInstance.initialize();
 async function signIn() {
   try {
     await msalReady;
-    const result = await msalInstance.loginPopup({ scopes: SCOPES });
-    msalInstance.setActiveAccount(result.account);
-    await initApp(result.account);
+    await msalInstance.loginRedirect({ scopes: SCOPES });
   } catch(e) {
     console.error(e);
     alert("Anmeldung fehlgeschlagen: " + e.message);
