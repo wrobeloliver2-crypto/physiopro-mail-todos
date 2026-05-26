@@ -241,37 +241,53 @@ async function loadMails() {
       return;
     }
 
-    loadingText.textContent = `KI analysiert ${mails.length} Mails…`;
-    const simplified = mails.slice(0, 20).map(m => ({
+    // Prepare all mails
+    const simplified = mails.map(m => ({
       id: m.id,
       betreff: m.subject || "(kein Betreff)",
       absender: m.from?.emailAddress?.address || "",
       absender_name: m.from?.emailAddress?.name || "",
       datum: (m.receivedDateTime || "").slice(0, 10),
-      text: (m.bodyPreview || "").slice(0, 200),
+      text: (m.bodyPreview || "").slice(0, 300),
       kategorien: m.categories || []
     }));
 
-    const ar = await fetch("/.netlify/functions/analyze3", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mails: simplified })
-    });
-    const arText = await ar.text();
-    let ab;
-    try { ab = JSON.parse(arText); } catch(e) { throw new Error("JSON parse fehler: " + arText.slice(0,200)); }
-    if (!ar.ok) throw new Error("Analyse: " + ar.status + " " + (ab.error || ""));
+    // Process in batches of 10 – each batch is one API call to stay within timeout
+    const BATCH_SIZE = 10;
+    const batches = [];
+    for (let i = 0; i < simplified.length; i += BATCH_SIZE) {
+      batches.push(simplified.slice(i, i + BATCH_SIZE));
+    }
 
-    allTodos = (ab.todos || []).map(t => {
-      const mail = mails.find(m => m.id === t.id);
-      const cats = mail?.categories || [];
-      let status = "todo";
-      if (cats.some(c => c.includes("Arbeit"))) status = "progress";
-      if (cats.some(c => c.includes("Erledigt"))) return null;
-      return { ...t, status, anzahl: t.anzahl || 1 };
-    }).filter(Boolean);
+    allTodos = [];
+    for (let b = 0; b < batches.length; b++) {
+      loadingText.textContent = `KI analysiert Batch ${b + 1} von ${batches.length} (${batches[b].length} Mails)…`;
 
-    renderTodos();
-    updateStats();
+      const ar = await fetch("/.netlify/functions/analyze3", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mails: batches[b] })
+      });
+      const arText = await ar.text();
+      let ab;
+      try { ab = JSON.parse(arText); } catch(e) { throw new Error("JSON parse fehler Batch " + (b+1) + ": " + arText.slice(0,200)); }
+      if (!ar.ok) throw new Error("Analyse Batch " + (b+1) + ": " + ar.status + " " + (ab.error || ""));
+
+      const batchTodos = (ab.todos || []).map(t => {
+        const mail = mails.find(m => m.id === t.id);
+        const cats = mail?.categories || [];
+        let status = "todo";
+        if (cats.some(c => c.includes("Arbeit"))) status = "progress";
+        if (cats.some(c => c.includes("Erledigt"))) return null;
+        return { ...t, status, anzahl: t.anzahl || 1 };
+      }).filter(Boolean);
+
+      allTodos = [...allTodos, ...batchTodos];
+
+      // Show results progressively after each batch
+      renderTodos();
+      updateStats();
+    }
+
     loading.classList.remove("visible");
     filterBar.style.display = "flex";
 
