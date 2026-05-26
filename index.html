@@ -106,6 +106,15 @@
     .error-banner { margin: 16px 24px; padding: 12px 16px; background: #fdf0ee; border: 1px solid #e8b4ae; border-radius: 10px; font-size: 12px; color: #a33; display: none; }
     .error-banner.visible { display: block; }
     .todo-card.removing { animation: fadeOut 0.4s ease forwards; }
+
+    /* Mail viewer */
+    .mail-viewer { display: none; margin: 0 16px 14px; border: 1px solid var(--warm); border-radius: 10px; overflow: hidden; background: white; }
+    .mail-viewer.open { display: block; }
+    .mail-viewer-header { padding: 10px 14px; background: var(--sand); border-bottom: 1px solid var(--warm); font-size: 11px; color: var(--muted); display: flex; justify-content: space-between; align-items: center; }
+    .mail-viewer-header strong { color: var(--text); font-size: 12px; }
+    .mail-viewer-loading { padding: 20px; text-align: center; font-size: 12px; color: var(--muted); }
+    .mail-viewer-body { padding: 14px 16px; font-size: 12px; line-height: 1.7; color: var(--text); max-height: 300px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; }
+    .mail-viewer-body iframe { width: 100%; border: none; min-height: 200px; }
     @keyframes fadeOut { to { opacity: 0; transform: scale(0.95); } }
   </style>
 </head>
@@ -454,14 +463,59 @@ async function loadMails(deltaOnly = false) {
   }
 }
 
-function openOriginal(ev, btn) {
+async function showOriginal(ev, btn) {
   ev.stopPropagation();
-  const webLink = btn.dataset.weblink;
-  const absender = btn.dataset.absender;
-  const betreff = btn.dataset.betreff;
-  // webLink is already an Outlook Web URL from Graph API
-  const url = webLink || ("https://outlook.office.com/mail/search?q=" + encodeURIComponent(betreff));
-  window.open(url, "physiopro_mail");
+  const mailId = btn.dataset.mailid;
+  const sid = btn.dataset.sid;
+  const viewer = document.getElementById("mv-" + sid);
+  const body = document.getElementById("mv-body-" + sid);
+  const meta = document.getElementById("mv-meta-" + sid);
+
+  // Toggle
+  if (viewer.classList.contains("open")) {
+    viewer.classList.remove("open");
+    btn.textContent = "📬 Original anzeigen";
+    return;
+  }
+
+  viewer.classList.add("open");
+  btn.textContent = "📬 Original ausblenden";
+  body.innerHTML = '<div class="mail-viewer-loading">⏳ Lade Mail…</div>';
+
+  try {
+    const tok = await getToken();
+    const r = await fetch(
+      "https://graph.microsoft.com/v1.0/me/messages/" + mailId + "?$select=body,from,receivedDateTime,subject",
+      { headers: { Authorization: "Bearer " + tok } }
+    );
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const data = await r.json();
+
+    const date = data.receivedDateTime
+      ? new Date(data.receivedDateTime).toLocaleString("de-DE", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" })
+      : "";
+    meta.textContent = date + " · " + (data.from?.emailAddress?.address || "");
+
+    if (data.body?.contentType === "html") {
+      // Render HTML in sandboxed iframe
+      const iframe = document.createElement("iframe");
+      iframe.setAttribute("sandbox", "allow-same-origin");
+      iframe.style.cssText = "width:100%;border:none;min-height:200px;max-height:300px;";
+      body.innerHTML = "";
+      body.appendChild(iframe);
+      iframe.contentDocument.open();
+      iframe.contentDocument.write(data.body.content);
+      iframe.contentDocument.close();
+      // Auto-resize iframe to content
+      setTimeout(() => {
+        try { iframe.style.height = iframe.contentDocument.body.scrollHeight + "px"; } catch(e) {}
+      }, 300);
+    } else {
+      body.textContent = data.body?.content || "(kein Inhalt)";
+    }
+  } catch(e) {
+    body.innerHTML = '<div class="mail-viewer-loading">⚠️ ' + e.message + '</div>';
+  }
 }
 
 function forwardMail(ev, btn) {
@@ -540,9 +594,16 @@ function renderTodos() {
       </div>
       <div class="card-body" id="b-${sid}">
         <div class="card-from">📨 ${esc(t.absender)}</div>
+        <div class="mail-viewer" id="mv-${sid}">
+          <div class="mail-viewer-header">
+            <strong>${esc(t.original_betreff||t.aufgabe)}</strong>
+            <span id="mv-meta-${sid}"></span>
+          </div>
+          <div class="mail-viewer-body" id="mv-body-${sid}"><div class="mail-viewer-loading">⏳ Lade Mail…</div></div>
+        </div>
         ${replyBlock}
         <div class="card-actions">
-          <button class="action-btn btn-original" data-weblink="${esc(t.webLink||'')}" data-absender="${esc(t.absender)}" data-betreff="${esc(t.original_betreff||t.aufgabe)}" onclick="openOriginal(event,this)">📬 Original öffnen</button>
+          <button class="action-btn btn-original" data-mailid="${t.id}" data-sid="${sid}" onclick="showOriginal(event,this)">📬 Original anzeigen</button>
           <button class="action-btn btn-forward" data-betreff="${esc(t.original_betreff||t.aufgabe)}" data-vorschau="${esc(t.vorschau||'')}" data-absender="${esc(t.absender)}" onclick="forwardMail(event,this)">↪ Weiterleiten</button>
           <button class="action-btn btn-todo ${t.status==='todo'?'btn-active':''}" onclick="setStatus(event,'${t.id}','todo')" ${t.status==='todo'?'disabled':''}>🔴 Todo</button>
           <button class="action-btn btn-progress ${t.status==='progress'?'btn-active':''}" onclick="setStatus(event,'${t.id}','progress')" ${t.status==='progress'?'disabled':''}>🔵 In Arbeit</button>
