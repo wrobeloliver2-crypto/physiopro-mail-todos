@@ -253,7 +253,7 @@ async function loadMails() {
     }));
 
     // Process in batches of 10 – each batch is one API call to stay within timeout
-    const BATCH_SIZE = 10;
+    const BATCH_SIZE = 8;
     const batches = [];
     for (let i = 0; i < simplified.length; i += BATCH_SIZE) {
       batches.push(simplified.slice(i, i + BATCH_SIZE));
@@ -269,8 +269,14 @@ async function loadMails() {
       });
       const arText = await ar.text();
       let ab;
-      try { ab = JSON.parse(arText); } catch(e) { throw new Error("JSON parse fehler Batch " + (b+1) + ": " + arText.slice(0,200)); }
-      if (!ar.ok) throw new Error("Analyse Batch " + (b+1) + ": " + ar.status + " " + (ab.error || ""));
+      try { ab = JSON.parse(arText); } catch(e) {
+        console.warn("Batch " + (b+1) + " übersprungen (Parse-Fehler):", arText.slice(0,100));
+        continue; // Skip this batch, keep going
+      }
+      if (!ar.ok) {
+        console.warn("Batch " + (b+1) + " übersprungen (HTTP " + ar.status + ")");
+        continue; // Skip this batch, keep going
+      }
 
       const batchTodos = (ab.todos || []).map(t => {
         const mail = mails.find(m => m.id === t.id);
