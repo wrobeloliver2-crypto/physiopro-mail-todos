@@ -40,6 +40,7 @@
     .btn-refresh:hover { background: var(--green2); }
     .btn-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
     .last-updated { font-size: 11px; color: var(--muted); white-space: nowrap; }
+    .sort-select { border: 1px solid var(--warm); background: white; color: var(--text); border-radius: 7px; padding: 4px 8px; font-size: 12px; font-family: 'DM Sans', sans-serif; cursor: pointer; }
 
     .loading-state { display: none; flex-direction: column; align-items: center; justify-content: center; padding: 60px 24px; gap: 16px; }
     .loading-state.visible { display: flex; }
@@ -174,6 +175,12 @@
         <option value="60">60 Tage</option>
       </select>
     </div>
+    <select class="sort-select" id="sort-sel" onchange="renderTodos()">
+      <option value="datum-desc">Neueste zuerst</option>
+      <option value="datum-asc">Älteste zuerst</option>
+      <option value="prioritaet">Priorität</option>
+      <option value="kategorie">Kategorie</option>
+    </select>
     <button class="btn-refresh" id="refresh-btn" onclick="loadMails()" title="Jetzt aktualisieren">↺</button>
     <span class="last-updated" id="last-updated">–</span>
   </div>
@@ -600,6 +607,17 @@ const PCOLS = { hoch: "#e74c3c", mittel: "#f39c12", niedrig: "#55725e" };
 
 function renderTodos() {
   const grid = document.getElementById("todo-grid");
+  // Sortierung
+  const sortVal = document.getElementById("sort-sel")?.value || "datum-desc";
+  const priorityOrder = { hoch: 0, mittel: 1, niedrig: 2 };
+  allTodos.sort((a, b) => {
+    if (sortVal === "datum-desc") return (b.datum || "").localeCompare(a.datum || "");
+    if (sortVal === "datum-asc")  return (a.datum || "").localeCompare(b.datum || "");
+    if (sortVal === "prioritaet") return (priorityOrder[a.prioritaet] ?? 1) - (priorityOrder[b.prioritaet] ?? 1);
+    if (sortVal === "kategorie")  return (a.kategorie || "").localeCompare(b.kategorie || "");
+    return 0;
+  });
+
   const visible = allTodos.filter(t =>
     t.status !== "done" &&
     (activeFilter === "all" || t.status === activeFilter || t.kategorie === activeFilter)
