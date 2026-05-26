@@ -604,7 +604,7 @@ function renderTodos() {
   }
 
   grid.innerHTML = visible.map(t => {
-    const sid = t.id.replace(/[^a-z0-9]/gi, "_");
+    const sid = (t.id || t.mailId || '').replace(/[^a-z0-9]/gi, "_");
     const sc = t.status === "progress" ? "status-progress" : "status-todo";
     const sl = t.status === "progress" ? "🔵 In Arbeit" : "🔴 Todo";
     const date = t.datum ? new Date(t.datum).toLocaleDateString("de-DE", { day:"2-digit", month:"short" }) : "";
@@ -650,13 +650,13 @@ function renderTodos() {
         </div>
         ${replyBlock}
         <div class="card-actions">
-          <button class="action-btn btn-original" data-mailid="${t.id}" data-sid="${sid}" onclick="showOriginal(event,this)">📬 Original anzeigen</button>
+          <button class="action-btn btn-original" data-mailid="${t.mailId||t.id}" data-sid="${sid}" onclick="showOriginal(event,this)">📬 Original anzeigen</button>
           <button class="action-btn btn-forward" data-betreff="${esc(t.original_betreff||t.aufgabe)}" data-vorschau="${esc(t.vorschau||'')}" data-absender="${esc(t.absender)}" onclick="forwardMail(event,this)">↪ Weiterleiten</button>
-          <button class="action-btn btn-progress ${t.status==='progress'?'btn-active':''}" onclick="setStatus(event,'${t.id}','progress')" ${t.status==='progress'?'disabled':''}>🔵 In Arbeit</button>
-          <button class="action-btn btn-done" onclick="markDone(event,'${t.id}','${sid}')">✅ Erledigt & Archivieren</button>
+          <button class="action-btn btn-progress ${t.status==='progress'?'btn-active':''}" onclick="setStatus(event,'${t.mailId||t.id}','progress')" ${t.status==='progress'?'disabled':''}>🔵 In Arbeit</button>
+          <button class="action-btn btn-done" onclick="markDone(event,'${t.mailId||t.id}','${sid}')">✅ Erledigt & Archivieren</button>
           <button class="action-btn btn-note" onclick="toggleNoteBlock(event,'${sid}')">📝 Notiz</button>
           <button class="action-btn btn-reminder" onclick="toggleNoteBlock(event,'${sid}')">⏰ Erinnerung</button>
-          <button class="action-btn btn-delete" onclick="deleteMail(event,'${t.id}','${sid}')">🗑️ Löschen</button>
+          <button class="action-btn btn-delete" onclick="deleteMail(event,'${t.mailId||t.id}','${sid}')">🗑️ Löschen</button>
         </div>
         <div class="note-reminder-block" id="nr-${sid}" style="display:none">
           <textarea id="note-${sid}" placeholder="Notiz hinzufügen…" onchange="saveNote('${t.id}',this.value)">${getNoteText('${t.id}')}</textarea>
