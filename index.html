@@ -231,8 +231,13 @@ async function loadMails() {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ mails: simplified })
     });
-    const ab = await ar.json();
+    const arText = await ar.text();
+    console.log("Function response:", arText.slice(0, 500));
+    let ab;
+    try { ab = JSON.parse(arText); } catch(e) { throw new Error("JSON parse fehler: " + arText.slice(0,200)); }
     if (!ar.ok) throw new Error("Analyse: " + ar.status + " " + (ab.error || ""));
+    errorBanner.textContent = "Debug: " + simplified.length + " Mails geschickt, " + (ab.todos||[]).length + " Todos zurück. Raw: " + arText.slice(0,150);
+    errorBanner.classList.add("visible");
     allTodos = (ab.todos || []).map(t => {
       const mail = mails.find(m => m.id === t.id);
       const cats = mail?.categories || [];
