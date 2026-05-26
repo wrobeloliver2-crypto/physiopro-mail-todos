@@ -333,8 +333,11 @@ async function loadMails() {
 
 const PCOLS = { hoch: "#e74c3c", mittel: "#f39c12", niedrig: "#55725e" };
 
-function openOriginal(ev, webLink, absender, betreff) {
+function openOriginal(ev, btn) {
   ev.stopPropagation();
+  const webLink = btn.dataset.weblink;
+  const absender = btn.dataset.absender;
+  const betreff = btn.dataset.betreff;
   const url = webLink || ("mailto:" + encodeURIComponent(absender) + "?subject=" + encodeURIComponent(betreff));
   const a = document.createElement("a");
   a.href = url;
@@ -345,11 +348,18 @@ function openOriginal(ev, webLink, absender, betreff) {
   document.body.removeChild(a);
 }
 
-function forwardMail(ev, betreff, vorschau, vonAbsender) {
+function forwardMail(ev, btn) {
   ev.stopPropagation();
+  const betreff = btn.dataset.betreff;
+  const vorschau = btn.dataset.vorschau;
+  const vonAbsender = btn.dataset.absender;
   const fwdBetreff = (betreff.startsWith("Fwd:") || betreff.startsWith("WG:")) ? betreff : "WG: " + betreff;
   const fwdBody = "\n\n-------- Weitergeleitete Nachricht --------\nVon: " + vonAbsender + "\nBetreff: " + betreff + "\n\n" + vorschau;
-  window.location.href = "mailto:?subject=" + encodeURIComponent(fwdBetreff) + "&body=" + encodeURIComponent(fwdBody);
+  const a = document.createElement("a");
+  a.href = "mailto:?subject=" + encodeURIComponent(fwdBetreff) + "&body=" + encodeURIComponent(fwdBody);
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 function openMail(absender, betreff, text) {
@@ -407,8 +417,8 @@ function renderTodos() {
         <div class="card-from">📨 ${esc(t.absender)}</div>
         ${replyBlock}
         <div class="card-actions">
-          <button class="action-btn btn-original" onclick="openOriginal(event,${JSON.stringify(t.webLink||'')},${JSON.stringify(t.absender)},${JSON.stringify(t.original_betreff||t.aufgabe)})">📬 Original öffnen</button>
-          <button class="action-btn btn-forward" onclick="forwardMail(event,${JSON.stringify(t.original_betreff||t.aufgabe)},${JSON.stringify(t.vorschau||'')},${JSON.stringify(t.absender)})">↪ Weiterleiten</button>
+          <button class="action-btn btn-original" data-weblink="${esc(t.webLink||'')}" data-absender="${esc(t.absender)}" data-betreff="${esc(t.original_betreff||t.aufgabe)}" onclick="openOriginal(event,this)">📬 Original öffnen</button>
+          <button class="action-btn btn-forward" data-betreff="${esc(t.original_betreff||t.aufgabe)}" data-vorschau="${esc(t.vorschau||'')}" data-absender="${esc(t.absender)}" onclick="forwardMail(event,this)">↪ Weiterleiten</button>
           <button class="action-btn btn-todo ${t.status==='todo'?'btn-active':''}" onclick="setStatus(event,'${t.id}','todo')" ${t.status==='todo'?'disabled':''}>🔴 Todo</button>
           <button class="action-btn btn-progress ${t.status==='progress'?'btn-active':''}" onclick="setStatus(event,'${t.id}','progress')" ${t.status==='progress'?'disabled':''}>🔵 In Arbeit</button>
           <button class="action-btn btn-done" onclick="markDone(event,'${t.id}','${sid}')">✅ Erledigt & Archivieren</button>
