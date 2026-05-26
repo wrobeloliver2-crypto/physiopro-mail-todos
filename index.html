@@ -387,17 +387,19 @@ async function loadMails(deltaOnly = false) {
       newMails = (data.value || []).filter(m => new Date(m.receivedDateTime) >= sinceDate);
       console.log("Vollsync: " + newMails.length + " Mails im Zeitraum gefunden");
 
-      // Hole Delta-Link separat für spätere Sync-Calls
+      // Hole Delta-Link: durch alle Seiten blättern bis @odata.deltaLink erscheint
       try {
-        const dr = await fetch(
-          "https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages/delta?$select=id",
-          { headers: { Authorization: "Bearer " + token } }
-        );
-        if (dr.ok) {
+        let deltaUrl = "https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages/delta?$select=id&$top=100";
+        let pageCount = 0;
+        while (deltaUrl && !nextDeltaLink && pageCount < 20) {
+          const dr = await fetch(deltaUrl, { headers: { Authorization: "Bearer " + token } });
+          if (!dr.ok) break;
           const dd = await dr.json();
           nextDeltaLink = dd["@odata.deltaLink"] || null;
-          console.log("DeltaLink gespeichert:", !!nextDeltaLink);
+          deltaUrl = dd["@odata.nextLink"] || null;
+          pageCount++;
         }
+        console.log("DeltaLink gespeichert:", !!nextDeltaLink, "nach", pageCount, "Seiten");
       } catch(e) { console.warn("DeltaLink holen fehlgeschlagen:", e.message); }
 
       allTodos = []; // full reset
