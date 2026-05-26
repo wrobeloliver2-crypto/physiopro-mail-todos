@@ -81,7 +81,10 @@ async function readAll(token, userEmail) {
   }).filter(t => {
     if (!t.mailId) return false;
     if (t.status === 'archived' || t.status === '') return false;
-    if (userEmail && t.userEmail && t.userEmail !== userEmail) return false;
+    // Strict user filter: only show rows that belong to this user
+    // Rows without userEmail are legacy/orphaned – skip them
+    if (!t.userEmail) return false;
+    if (userEmail && t.userEmail !== userEmail) return false;
     return true;
   });
 }
