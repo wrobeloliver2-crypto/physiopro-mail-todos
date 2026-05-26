@@ -87,6 +87,8 @@
     .action-btn { padding: 6px 12px; border-radius: 7px; border: 1px solid; cursor: pointer; font-size: 11px; font-weight: 500; font-family: 'DM Sans', sans-serif; transition: all 0.15s; }
     .btn-original { background: #f5f0ff; color: #4a2a8a; border-color: #c9b8ee; }
     .btn-original:hover { background: #ede5ff; }
+    .btn-forward { background: #f0f7ff; color: #1a4a8a; border-color: #a8c8ee; }
+    .btn-forward:hover { background: #e0eeff; }
     .btn-todo { background: #fdf0ee; color: #a33; border-color: #e8b4ae; }
     .btn-progress { background: #eef4fd; color: #1a3a6a; border-color: #aac4e8; }
     .btn-done { background: #eef6f0; color: #1a4a2a; border-color: #9acaaa; }
@@ -322,6 +324,13 @@ function openOriginal(ev, webLink, absender, betreff) {
   }
 }
 
+function forwardMail(ev, betreff, vorschau, vonAbsender) {
+  ev.stopPropagation();
+  const fwdBetreff = (betreff.startsWith("Fwd:") || betreff.startsWith("WG:")) ? betreff : "WG: " + betreff;
+  const fwdBody = "\n\n-------- Weitergeleitete Nachricht --------\nVon: " + vonAbsender + "\nBetreff: " + betreff + "\n\n" + vorschau;
+  window.location.href = "mailto:?subject=" + encodeURIComponent(fwdBetreff) + "&body=" + encodeURIComponent(fwdBody);
+}
+
 function openMail(absender, betreff, text) {
   const mailto = `mailto:${encodeURIComponent(absender)}?subject=${encodeURIComponent(betreff)}&body=${encodeURIComponent(text)}`;
   window.location.href = mailto;
@@ -376,6 +385,7 @@ function renderTodos() {
         ${replyBlock}
         <div class="card-actions">
           <button class="action-btn btn-original" onclick="openOriginal(event,${JSON.stringify(t.webLink||'')},${JSON.stringify(t.absender)},${JSON.stringify(t.original_betreff||t.aufgabe)})">📬 Original öffnen</button>
+          <button class="action-btn btn-forward" onclick="forwardMail(event,${JSON.stringify(t.original_betreff||t.aufgabe)},${JSON.stringify(t.vorschau||'')},${JSON.stringify(t.absender)})">↪ Weiterleiten</button>
           <button class="action-btn btn-todo ${t.status==='todo'?'btn-active':''}" onclick="setStatus(event,'${t.id}','todo')" ${t.status==='todo'?'disabled':''}>🔴 Todo</button>
           <button class="action-btn btn-progress ${t.status==='progress'?'btn-active':''}" onclick="setStatus(event,'${t.id}','progress')" ${t.status==='progress'?'disabled':''}>🔵 In Arbeit</button>
           <button class="action-btn btn-done" onclick="markDone(event,'${t.id}','${sid}')">✅ Erledigt & Archivieren</button>
