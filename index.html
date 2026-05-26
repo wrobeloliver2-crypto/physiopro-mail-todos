@@ -97,6 +97,20 @@
     .btn-done { background: #eef6f0; color: #1a4a2a; border-color: #9acaaa; }
     .btn-delete { background: #fff0f0; color: #8a1a1a; border-color: #e8a8a8; }
     .btn-delete:hover { background: #ffe0e0; }
+    .btn-note { background: #fffbf0; color: #7a5a00; border-color: #e8d890; }
+    .btn-note:hover { background: #fff5d0; }
+    .btn-reminder { background: #f0fff4; color: #1a6a3a; border-color: #90d8aa; }
+    .btn-reminder:hover { background: #d0ffe0; }
+
+    /* Notiz & Erinnerung Block */
+    .note-reminder-block { padding: 10px 16px 14px; border-top: 1px solid var(--sand); background: #fdfcfa; }
+    .note-reminder-block textarea { width: 100%; border: 1px solid var(--warm); border-radius: 8px; padding: 8px 10px; font-size: 12px; font-family: 'DM Sans', sans-serif; color: var(--text); background: white; resize: vertical; min-height: 60px; margin-bottom: 8px; }
+    .note-reminder-block textarea:focus { outline: none; border-color: var(--green); }
+    .reminder-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .reminder-row input[type=datetime-local] { border: 1px solid var(--warm); border-radius: 8px; padding: 5px 8px; font-size: 11px; font-family: 'DM Sans', sans-serif; color: var(--text); }
+    .reminder-row input:focus { outline: none; border-color: var(--green); }
+    .note-saved { font-size: 10px; color: var(--green); margin-left: 6px; }
+    .reminder-active { font-size: 10px; color: #1a6a3a; background: #d0ffe0; border-radius: 4px; padding: 2px 7px; }
     .btn-active { font-weight: 700; box-shadow: inset 0 0 0 1px currentColor; }
     .btn-archiving { opacity: 0.5; cursor: not-allowed; }
 
@@ -451,6 +465,7 @@ async function loadMails(deltaOnly = false) {
     const now = new Date().toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
     setLastUpdated(now, deltaOnly);
     startAutoRefresh();
+    restoreReminders();
 
   } catch(e) {
     loading.classList.remove("visible");
@@ -605,10 +620,19 @@ function renderTodos() {
         <div class="card-actions">
           <button class="action-btn btn-original" data-mailid="${t.id}" data-sid="${sid}" onclick="showOriginal(event,this)">📬 Original anzeigen</button>
           <button class="action-btn btn-forward" data-betreff="${esc(t.original_betreff||t.aufgabe)}" data-vorschau="${esc(t.vorschau||'')}" data-absender="${esc(t.absender)}" onclick="forwardMail(event,this)">↪ Weiterleiten</button>
-          <button class="action-btn btn-todo ${t.status==='todo'?'btn-active':''}" onclick="setStatus(event,'${t.id}','todo')" ${t.status==='todo'?'disabled':''}>🔴 Todo</button>
           <button class="action-btn btn-progress ${t.status==='progress'?'btn-active':''}" onclick="setStatus(event,'${t.id}','progress')" ${t.status==='progress'?'disabled':''}>🔵 In Arbeit</button>
           <button class="action-btn btn-done" onclick="markDone(event,'${t.id}','${sid}')">✅ Erledigt & Archivieren</button>
+          <button class="action-btn btn-note" onclick="toggleNoteBlock(event,'${sid}')">📝 Notiz</button>
+          <button class="action-btn btn-reminder" onclick="toggleNoteBlock(event,'${sid}')">⏰ Erinnerung</button>
           <button class="action-btn btn-delete" onclick="deleteMail(event,'${t.id}','${sid}')">🗑️ Löschen</button>
+        </div>
+        <div class="note-reminder-block" id="nr-${sid}" style="display:none">
+          <textarea id="note-${sid}" placeholder="Notiz hinzufügen…" onchange="saveNote('${t.id}',this.value)">${getNoteText('${t.id}')}</textarea>
+          <div class="reminder-row">
+            <input type="datetime-local" id="rem-${sid}" value="${getReminderValue('${t.id}')}" onchange="saveReminder('${t.id}',this.value,'${esc(t.aufgabe)}')">
+            <span id="rem-label-${sid}" class="reminder-active" style="display:${getReminderValue('${t.id}')?'inline':'none'}">⏰ Erinnerung gesetzt</span>
+            <span class="note-saved" id="note-saved-${sid}"></span>
+          </div>
         </div>
       </div>
     </div>`;
@@ -701,6 +725,85 @@ async function deleteMail(ev, mailId, sid) {
     btn.textContent = "🗑️ Löschen";
     alert("Fehler: " + e.message);
   }
+}
+
+// ── Notiz & Erinnerung ────────────────────────────────────────
+function toggleNoteBlock(ev, sid) {
+  ev.stopPropagation();
+  const block = document.getElementById("nr-" + sid);
+  if (block) block.style.display = block.style.display === "none" ? "block" : "none";
+}
+
+function getNoteText(mailId) {
+  return sessionStorage.getItem("note_" + mailId) || "";
+}
+
+function getReminderValue(mailId) {
+  return sessionStorage.getItem("reminder_" + mailId) || "";
+}
+
+function saveNote(mailId, text) {
+  sessionStorage.setItem("note_" + mailId, text);
+  // Find sid from mailId
+  const todo = allTodos.find(t => t.id === mailId);
+  if (todo) {
+    const sid = mailId.replace(/[^a-z0-9]/gi, "_");
+    const label = document.getElementById("note-saved-" + sid);
+    if (label) { label.textContent = "✓ gespeichert"; setTimeout(() => { label.textContent = ""; }, 2000); }
+  }
+}
+
+async function saveReminder(mailId, datetime, aufgabe) {
+  if (!datetime) { sessionStorage.removeItem("reminder_" + mailId); return; }
+  sessionStorage.setItem("reminder_" + mailId, datetime);
+
+  const sid = mailId.replace(/[^a-z0-9]/gi, "_");
+  const label = document.getElementById("rem-label-" + sid);
+  if (label) label.style.display = "inline";
+
+  // Schedule check (works while tab is open)
+  scheduleReminder(mailId, datetime, aufgabe);
+}
+
+function scheduleReminder(mailId, datetime, aufgabe) {
+  const target = new Date(datetime).getTime();
+  const now = Date.now();
+  const delay = target - now;
+  if (delay <= 0) return; // already past
+  if (delay > 24 * 60 * 60 * 1000) return; // more than 24h away, skip (will re-schedule on next load)
+
+  setTimeout(async () => {
+    try {
+      const tok = await getToken();
+      const account = pca.getActiveAccount();
+      const myEmail = account?.username || "";
+      if (!myEmail) return;
+
+      // Send reminder mail to self via Graph API
+      await fetch("https://graph.microsoft.com/v1.0/me/sendMail", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + tok, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: {
+            subject: "⏰ Erinnerung: " + aufgabe,
+            body: { contentType: "Text", content: "Erinnerung aus PhysioPro Todos:\n\n" + aufgabe + "\n\nNotiz: " + (sessionStorage.getItem("note_" + mailId) || "–") },
+            toRecipients: [{ emailAddress: { address: myEmail } }]
+          }
+        })
+      });
+      console.log("Erinnerung gesendet für:", aufgabe);
+      // Clear reminder after sending
+      sessionStorage.removeItem("reminder_" + mailId);
+    } catch(e) { console.warn("Erinnerung senden fehlgeschlagen:", e.message); }
+  }, delay);
+}
+
+// On load: re-schedule any pending reminders within 24h
+function restoreReminders() {
+  allTodos.forEach(t => {
+    const rem = sessionStorage.getItem("reminder_" + t.id);
+    if (rem) scheduleReminder(t.id, rem, t.aufgabe);
+  });
 }
 
 function setFilter(f, el) {
