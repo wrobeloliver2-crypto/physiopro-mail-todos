@@ -93,6 +93,8 @@
     .btn-todo { background: #fdf0ee; color: #a33; border-color: #e8b4ae; }
     .btn-progress { background: #eef4fd; color: #1a3a6a; border-color: #aac4e8; }
     .btn-done { background: #eef6f0; color: #1a4a2a; border-color: #9acaaa; }
+    .btn-delete { background: #fff0f0; color: #8a1a1a; border-color: #e8a8a8; }
+    .btn-delete:hover { background: #ffe0e0; }
     .btn-active { font-weight: 700; box-shadow: inset 0 0 0 1px currentColor; }
     .btn-archiving { opacity: 0.5; cursor: not-allowed; }
 
@@ -429,6 +431,7 @@ function renderTodos() {
           <button class="action-btn btn-todo ${t.status==='todo'?'btn-active':''}" onclick="setStatus(event,'${t.id}','todo')" ${t.status==='todo'?'disabled':''}>🔴 Todo</button>
           <button class="action-btn btn-progress ${t.status==='progress'?'btn-active':''}" onclick="setStatus(event,'${t.id}','progress')" ${t.status==='progress'?'disabled':''}>🔵 In Arbeit</button>
           <button class="action-btn btn-done" onclick="markDone(event,'${t.id}','${sid}')">✅ Erledigt & Archivieren</button>
+          <button class="action-btn btn-delete" onclick="deleteMail(event,'${t.id}','${sid}')">🗑️ Löschen</button>
         </div>
       </div>
     </div>`;
@@ -491,6 +494,34 @@ async function markDone(ev, mailId, sid) {
     btn.classList.remove("btn-archiving");
     btn.disabled = false;
     btn.textContent = "✅ Erledigt & Archivieren";
+    alert("Fehler: " + e.message);
+  }
+}
+
+async function deleteMail(ev, mailId, sid) {
+  ev.stopPropagation();
+  if (!confirm("Mail wirklich löschen?")) return;
+  const card = document.getElementById("c-" + sid);
+  const btn = ev.target;
+  btn.disabled = true;
+  btn.textContent = "⏳ Löschen…";
+  try {
+    token = await getToken();
+    const res = await fetch(`https://graph.microsoft.com/v1.0/me/messages/${mailId}`, {
+      method: "DELETE",
+      headers: { Authorization: "Bearer " + token }
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    if (card) {
+      card.classList.add("removing");
+      setTimeout(() => {
+        allTodos = allTodos.filter(t => t.id !== mailId);
+        renderTodos(); updateStats();
+      }, 400);
+    }
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = "🗑️ Löschen";
     alert("Fehler: " + e.message);
   }
 }
