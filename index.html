@@ -443,7 +443,7 @@ async function loadMails() {
       betreff: m.subject || "(kein Betreff)",
       absender: m.from?.emailAddress?.address || "",
       datum: m.receivedDateTime?.split("T")[0] || "",
-      text: (m.bodyPreview || "").slice(0, 200),
+      text: (m.bodyPreview || "").slice(0, 400),
       kategorien: m.categories || []
     }));
 
@@ -452,7 +452,7 @@ async function loadMails() {
     const analyzeRes = await fetch("/.netlify/functions/analyze-mails", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mails: simplified.slice(0, 20) })
+      body: JSON.stringify({ mails: simplified })
     });
     const analyzeBody = await analyzeRes.json();
     if (!analyzeRes.ok) throw new Error("Analyse-Fehler " + analyzeRes.status + ": " + (analyzeBody.error || ""));
@@ -622,6 +622,14 @@ function escHtml(s) {
 window.addEventListener("DOMContentLoaded", async () => {
   try {
     await msalReady;
+    // Handle redirect response first
+    const result = await msalInstance.handleRedirectPromise();
+    if (result) {
+      msalInstance.setActiveAccount(result.account);
+      await initApp(result.account);
+      return;
+    }
+    // Check existing session
     const accounts = msalInstance.getAllAccounts();
     if (accounts.length > 0) {
       msalInstance.setActiveAccount(accounts[0]);
@@ -981,9 +989,7 @@ const msalReady = msalInstance.initialize();
 async function signIn() {
   try {
     await msalReady;
-    const result = await msalInstance.loginPopup({ scopes: SCOPES });
-    msalInstance.setActiveAccount(result.account);
-    await initApp(result.account);
+    await msalInstance.loginRedirect({ scopes: SCOPES });
   } catch(e) {
     console.error(e);
     alert("Anmeldung fehlgeschlagen: " + e.message);
@@ -1080,7 +1086,7 @@ async function loadMails() {
     const analyzeRes = await fetch("/.netlify/functions/analyze-mails", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mails: simplified.slice(0, 20) })
+      body: JSON.stringify({ mails: simplified })
     });
     const analyzeBody = await analyzeRes.json();
     if (!analyzeRes.ok) throw new Error("Analyse-Fehler " + analyzeRes.status + ": " + (analyzeBody.error || ""));
