@@ -322,13 +322,31 @@ async function loadMails(deltaOnly = false) {
 
   try {
     loadingText.textContent = "Authentifizierung…";
-    console.log("loadMails called, deltaOnly=", deltaOnly, "cacheAge=", cacheAge());
     token = await getToken();
 
-    const { todos: cachedTodos, deltaLink } = loadCache();
+    // ── 1. Lade bestehende Todos aus Google Sheet ──────────────
+    loadingText.textContent = "Lade Todos aus Datenbank…";
+    let sheetTodos = [];
+    try {
+      const sr = await fetch("/.netlify/functions/todos-api");
+      if (sr.ok) {
+        const sd = await sr.json();
+        sheetTodos = sd.todos || [];
+        console.log("Sheet Todos geladen:", sheetTodos.length);
+      }
+    } catch(e) { console.warn("Sheet laden fehlgeschlagen:", e.message); }
 
+    // Show sheet todos immediately while fetching new mails
+    if (sheetTodos.length > 0 && deltaOnly) {
+      allTodos = sheetTodos;
+      renderTodos(); updateStats();
+      document.getElementById("filter-bar").style.display = "flex";
+    }
+
+    const { deltaLink } = loadCache();
     let newMails = [];
     let nextDeltaLink = null;
+    const knownMailIds = new Set(sheetTodos.map(t => t.mailId));
 
     if (deltaOnly && deltaLink) {
       // ── DELTA: only fetch changed mails since last sync ──
@@ -443,12 +461,23 @@ async function loadMails(deltaOnly = false) {
             alreadyReplied: repliedSubjects.has(subjectClean) };
         }).filter(Boolean);
 
-        // Merge: remove existing todos with same id, add new ones
+        // Merge into allTodos
         const newIds = new Set(batchTodos.map(t => t.id));
-        allTodos = allTodos.filter(t => !newIds.has(t.id));
+        allTodos = allTodos.filter(t => !newIds.has(t.mailId || t.id));
         allTodos = [...allTodos, ...batchTodos];
-
         renderTodos(); updateStats();
+
+        // Save new todos to Google Sheet
+        if (batchTodos.length > 0) {
+          fetch("/.netlify/functions/todos-api", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "bulk_upsert",
+              todos: batchTodos.map(t => ({ ...t, mailId: t.id }))
+            })
+          }).catch(e => console.warn("Sheet speichern:", e.message));
+        }
       }
     } else if (deltaOnly) {
       loadingText.textContent = "Keine neuen Mails.";
@@ -657,9 +686,14 @@ async function setStatus(ev, mailId, newStatus) {
       method: "PATCH", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
       body: JSON.stringify({ categories: [...cats, map[newStatus]] })
     });
-    const t = allTodos.find(t => t.id === mailId);
+    const t = allTodos.find(t => t.id === mailId || t.mailId === mailId);
     if (t) t.status = newStatus;
     renderTodos(); updateStats();
+    // Sync to sheet
+    fetch("/.netlify/functions/todos-api", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "update_field", mailId, field: "status", value: newStatus })
+    }).catch(e => console.warn("Sheet sync:", e.message));
   } catch(e) { alert("Fehler: " + e.message); }
 }
 
@@ -684,6 +718,11 @@ async function markDone(ev, mailId, sid) {
       method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
       body: JSON.stringify({ destinationId: "archive" })
     });
+    // Mark as archived in sheet
+    fetch("/.netlify/functions/todos-api", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "update_field", mailId, field: "status", value: "archived" })
+    }).catch(e => console.warn("Sheet archive:", e.message));
     if (card) {
       card.classList.add("removing");
       setTimeout(() => {
@@ -713,10 +752,15 @@ async function deleteMail(ev, mailId, sid) {
       headers: { Authorization: "Bearer " + token }
     });
     if (!res.ok) throw new Error("HTTP " + res.status);
+    // Delete from sheet
+    fetch("/.netlify/functions/todos-api", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "delete", mailId })
+    }).catch(e => console.warn("Sheet delete:", e.message));
     if (card) {
       card.classList.add("removing");
       setTimeout(() => {
-        allTodos = allTodos.filter(t => t.id !== mailId);
+        allTodos = allTodos.filter(t => t.id !== mailId && t.mailId !== mailId);
         renderTodos(); updateStats();
       }, 400);
     }
@@ -735,27 +779,39 @@ function toggleNoteBlock(ev, sid) {
 }
 
 function getNoteText(mailId) {
-  return sessionStorage.getItem("note_" + mailId) || "";
+  const todo = allTodos.find(t => t.id === mailId || t.mailId === mailId);
+  return todo?.notiz || sessionStorage.getItem("note_" + mailId) || "";
 }
 
 function getReminderValue(mailId) {
-  return sessionStorage.getItem("reminder_" + mailId) || "";
+  const todo = allTodos.find(t => t.id === mailId || t.mailId === mailId);
+  return todo?.erinnerung || sessionStorage.getItem("reminder_" + mailId) || "";
 }
 
 function saveNote(mailId, text) {
   sessionStorage.setItem("note_" + mailId, text);
-  // Find sid from mailId
-  const todo = allTodos.find(t => t.id === mailId);
+  const todo = allTodos.find(t => t.id === mailId || t.mailId === mailId);
   if (todo) {
+    todo.notiz = text;
     const sid = mailId.replace(/[^a-z0-9]/gi, "_");
     const label = document.getElementById("note-saved-" + sid);
     if (label) { label.textContent = "✓ gespeichert"; setTimeout(() => { label.textContent = ""; }, 2000); }
   }
+  // Sync to sheet
+  fetch("/.netlify/functions/todos-api", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "update_field", mailId, field: "notiz", value: text })
+  }).catch(e => console.warn("Notiz sync:", e.message));
 }
 
 async function saveReminder(mailId, datetime, aufgabe) {
   if (!datetime) { sessionStorage.removeItem("reminder_" + mailId); return; }
   sessionStorage.setItem("reminder_" + mailId, datetime);
+  // Sync to sheet
+  fetch("/.netlify/functions/todos-api", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "update_field", mailId, field: "erinnerung", value: datetime })
+  }).catch(e => console.warn("Erinnerung sync:", e.message));
 
   const sid = mailId.replace(/[^a-z0-9]/gi, "_");
   const label = document.getElementById("rem-label-" + sid);
