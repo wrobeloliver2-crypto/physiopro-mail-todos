@@ -85,6 +85,8 @@
 
     .card-actions { display: flex; gap: 6px; flex-wrap: wrap; }
     .action-btn { padding: 6px 12px; border-radius: 7px; border: 1px solid; cursor: pointer; font-size: 11px; font-weight: 500; font-family: 'DM Sans', sans-serif; transition: all 0.15s; }
+    .btn-original { background: #f5f0ff; color: #4a2a8a; border-color: #c9b8ee; }
+    .btn-original:hover { background: #ede5ff; }
     .btn-todo { background: #fdf0ee; color: #a33; border-color: #e8b4ae; }
     .btn-progress { background: #eef4fd; color: #1a3a6a; border-color: #aac4e8; }
     .btn-done { background: #eef6f0; color: #1a4a2a; border-color: #9acaaa; }
@@ -225,7 +227,7 @@ async function loadMails() {
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
     const r = await fetch(
-      `https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$top=100&$select=id,subject,from,receivedDateTime,bodyPreview,categories&$orderby=receivedDateTime desc`,
+      `https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$top=100&$select=id,subject,from,receivedDateTime,bodyPreview,categories,webLink&$orderby=receivedDateTime desc`,
       { headers: { Authorization: "Bearer " + token } }
     );
     if (!r.ok) throw new Error("Graph: " + r.status);
@@ -249,7 +251,8 @@ async function loadMails() {
       absender_name: m.from?.emailAddress?.name || "",
       datum: (m.receivedDateTime || "").slice(0, 10),
       text: (m.bodyPreview || "").slice(0, 300),
-      kategorien: m.categories || []
+      kategorien: m.categories || [],
+      webLink: m.webLink || ""
     }));
 
     // Process in batches of 10 – each batch is one API call to stay within timeout
@@ -284,7 +287,7 @@ async function loadMails() {
         let status = "todo";
         if (cats.some(c => c.includes("Arbeit"))) status = "progress";
         if (cats.some(c => c.includes("Erledigt"))) return null;
-        return { ...t, status, anzahl: t.anzahl || 1 };
+        return { ...t, status, anzahl: t.anzahl || 1, original_betreff: mail?.subject || t.aufgabe, webLink: mail?.webLink || "" };
       }).filter(Boolean);
 
       allTodos = [...allTodos, ...batchTodos];
@@ -307,6 +310,17 @@ async function loadMails() {
 }
 
 const PCOLS = { hoch: "#e74c3c", mittel: "#f39c12", niedrig: "#55725e" };
+
+function openOriginal(ev, webLink, absender, betreff) {
+  ev.stopPropagation();
+  if (webLink) {
+    // Open directly in Outlook Web
+    window.open(webLink, "_blank");
+  } else {
+    // Fallback: open mail client to the sender
+    window.location.href = `mailto:${encodeURIComponent(absender)}?subject=${encodeURIComponent(betreff)}`;
+  }
+}
 
 function openMail(absender, betreff, text) {
   const mailto = `mailto:${encodeURIComponent(absender)}?subject=${encodeURIComponent(betreff)}&body=${encodeURIComponent(text)}`;
@@ -361,6 +375,7 @@ function renderTodos() {
         <div class="card-from">📨 ${esc(t.absender)}</div>
         ${replyBlock}
         <div class="card-actions">
+          <button class="action-btn btn-original" onclick="openOriginal(event,${JSON.stringify(t.webLink||'')},${JSON.stringify(t.absender)},${JSON.stringify(t.original_betreff||t.aufgabe)})">📬 Original öffnen</button>
           <button class="action-btn btn-todo ${t.status==='todo'?'btn-active':''}" onclick="setStatus(event,'${t.id}','todo')" ${t.status==='todo'?'disabled':''}>🔴 Todo</button>
           <button class="action-btn btn-progress ${t.status==='progress'?'btn-active':''}" onclick="setStatus(event,'${t.id}','progress')" ${t.status==='progress'?'disabled':''}>🔵 In Arbeit</button>
           <button class="action-btn btn-done" onclick="markDone(event,'${t.id}','${sid}')">✅ Erledigt & Archivieren</button>
