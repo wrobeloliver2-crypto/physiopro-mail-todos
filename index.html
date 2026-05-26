@@ -61,21 +61,26 @@
     .todo-grid { padding: 20px 24px; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; align-items: start; }
     .todo-card { background: white; border-radius: 14px; border: 1px solid var(--warm); box-shadow: 0 2px 8px rgba(44,40,37,0.06); overflow: hidden; transition: box-shadow 0.2s; }
     .todo-card:hover { box-shadow: 0 6px 20px rgba(44,40,37,0.1); }
-    .card-header { padding: 14px 16px 10px; cursor: pointer; }
+    .card-header { padding: 14px 16px 12px; cursor: pointer; }
     .card-meta { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; flex-wrap: wrap; }
     .priority-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
     .cat-badge { font-size: 10px; font-weight: 600; text-transform: uppercase; color: var(--muted); background: var(--sand); border-radius: 4px; padding: 2px 6px; }
     .date-badge { font-size: 10px; color: var(--muted); margin-left: auto; }
+    .count-badge { font-size: 10px; font-weight: 700; background: var(--dark); color: white; border-radius: 10px; padding: 2px 7px; }
     .card-task { font-size: 14px; font-weight: 600; color: var(--dark); line-height: 1.4; margin-bottom: 6px; }
     .card-task.done { text-decoration: line-through; opacity: 0.45; }
-    .card-preview { font-size: 12px; color: var(--muted); line-height: 1.5; }
-    .status-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 600; border-radius: 6px; padding: 3px 8px; border: 1px solid; margin-top: 8px; }
+    .card-preview { font-size: 12px; color: var(--muted); line-height: 1.5; margin-bottom: 8px; }
+
+    /* Details-Box direkt sichtbar unter Vorschau */
+    .card-details-inline { font-size: 12px; color: var(--text); line-height: 1.6; background: var(--sand); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; border-left: 3px solid var(--green); display: none; }
+    .card-details-inline.open { display: block; }
+
+    .status-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 600; border-radius: 6px; padding: 3px 8px; border: 1px solid; }
     .status-todo { background: #fdf0ee; color: #a33; border-color: #e8b4ae; }
     .status-progress { background: #eef4fd; color: #1a3a6a; border-color: #aac4e8; }
     .status-done { background: #eef6f0; color: #1a4a2a; border-color: #9acaaa; }
-    .card-body { display: none; padding: 12px 16px 14px; border-top: 1px solid var(--sand); background: #fdfcfa; }
-    .card-body.open { display: block; }
-    .card-detail { font-size: 12px; color: var(--text); line-height: 1.6; margin-bottom: 10px; }
+
+    .card-body { padding: 10px 16px 14px; border-top: 1px solid var(--sand); background: #fdfcfa; }
     .card-from { font-size: 11px; color: var(--muted); margin-bottom: 12px; }
     .card-actions { display: flex; gap: 6px; flex-wrap: wrap; }
     .action-btn { padding: 6px 12px; border-radius: 7px; border: 1px solid; cursor: pointer; font-size: 11px; font-weight: 500; font-family: 'DM Sans', sans-serif; transition: all 0.15s; }
@@ -236,14 +241,13 @@ async function loadMails() {
     try { ab = JSON.parse(arText); } catch(e) { throw new Error("JSON parse fehler: " + arText.slice(0,200)); }
     if (!ar.ok) throw new Error("Analyse: " + ar.status + " " + (ab.error || ""));
     
-    
     allTodos = (ab.todos || []).map(t => {
       const mail = mails.find(m => m.id === t.id);
       const cats = mail?.categories || [];
       let status = "todo";
       if (cats.some(c => c.includes("Erledigt"))) status = "done";
       else if (cats.some(c => c.includes("Arbeit"))) status = "progress";
-      return { ...t, status };
+      return { ...t, status, anzahl: t.anzahl || 1 };
     });
 
     renderTodos();
@@ -274,19 +278,21 @@ function renderTodos() {
     const sc = t.status === "done" ? "status-done" : t.status === "progress" ? "status-progress" : "status-todo";
     const sl = t.status === "done" ? "🟢 Erledigt" : t.status === "progress" ? "🔵 In Arbeit" : "🔴 Todo";
     const date = t.datum ? new Date(t.datum).toLocaleDateString("de-DE", { day:"2-digit", month:"short" }) : "";
+    const countBadge = t.anzahl > 1 ? `<span class="count-badge">${t.anzahl}×</span>` : "";
     return `<div class="todo-card" id="c-${sid}">
       <div class="card-header" onclick="toggle('${sid}')">
         <div class="card-meta">
           <div class="priority-dot" style="background:${PCOLS[t.prioritaet]||'#999'}"></div>
           <span class="cat-badge">${esc(t.kategorie||"Sonstiges")}</span>
+          ${countBadge}
           <span class="date-badge">${date}</span>
         </div>
         <div class="card-task ${t.status==='done'?'done':''}">${esc(t.aufgabe)}</div>
         <div class="card-preview">${esc(t.vorschau||"")}</div>
+        <div class="card-details-inline" id="d-${sid}">${esc(t.details||"")}</div>
         <div class="status-badge ${sc}">${sl}</div>
       </div>
-      <div class="card-body" id="b-${sid}">
-        <div class="card-detail">${esc(t.details||"")}</div>
+      <div class="card-body" id="b-${sid}" style="display:none">
         <div class="card-from">📨 ${esc(t.absender)}</div>
         <div class="card-actions">
           <button class="action-btn btn-todo ${t.status==='todo'?'btn-active':''}" onclick="setStatus('${t.id}','todo')" ${t.status==='todo'?'disabled':''}>🔴 Todo</button>
@@ -300,7 +306,9 @@ function renderTodos() {
 }
 
 function toggle(sid) {
-  document.getElementById("b-" + sid)?.classList.toggle("open");
+  document.getElementById("d-" + sid)?.classList.toggle("open");
+  const body = document.getElementById("b-" + sid);
+  if (body) body.style.display = body.style.display === "none" ? "block" : "none";
 }
 
 async function setStatus(mailId, newStatus) {
