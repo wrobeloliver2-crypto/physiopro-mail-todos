@@ -363,14 +363,9 @@ function openOriginal(ev, btn) {
   const webLink = btn.dataset.weblink;
   const absender = btn.dataset.absender;
   const betreff = btn.dataset.betreff;
-  const url = webLink || ("mailto:" + encodeURIComponent(absender) + "?subject=" + encodeURIComponent(betreff));
-  const a = document.createElement("a");
-  a.href = url;
-  a.target = "_blank";
-  a.rel = "noopener";
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  // webLink is already an Outlook Web URL from Graph API
+  const url = webLink || ("https://outlook.office.com/mail/search?q=" + encodeURIComponent(betreff));
+  window.open(url, "_blank");
 }
 
 function forwardMail(ev, btn) {
@@ -380,13 +375,10 @@ function forwardMail(ev, btn) {
   const vonAbsender = btn.dataset.absender;
   const fwdBetreff = (betreff.startsWith("Fwd:") || betreff.startsWith("WG:")) ? betreff : "WG: " + betreff;
   const fwdBody = "\n\n-------- Weitergeleitete Nachricht --------\nVon: " + vonAbsender + "\nBetreff: " + betreff + "\n\n" + vorschau;
-  const a = document.createElement("a");
-  a.href = "mailto:?subject=" + encodeURIComponent(fwdBetreff) + "&body=" + encodeURIComponent(fwdBody);
-  a.target = "_blank";
-  a.rel = "noopener";
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  // Outlook Web compose URL (Empfänger leer lassen – wird manuell eingetragen)
+  const url = "https://outlook.office.com/mail/deeplink/compose?subject=" + encodeURIComponent(fwdBetreff)
+    + "&body=" + encodeURIComponent(fwdBody);
+  window.open(url, "_blank");
 }
 
 function openMail(ev, btn) {
@@ -394,13 +386,11 @@ function openMail(ev, btn) {
   const absender = btn.dataset.absender;
   const betreff = btn.dataset.betreff;
   const text = btn.dataset.text;
-  const a = document.createElement("a");
-  a.href = "mailto:" + encodeURIComponent(absender) + "?subject=" + encodeURIComponent(betreff) + "&body=" + encodeURIComponent(text);
-  a.target = "_blank";
-  a.rel = "noopener";
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  // Outlook Web compose URL
+  const url = "https://outlook.office.com/mail/deeplink/compose?to=" + encodeURIComponent(absender)
+    + "&subject=" + encodeURIComponent(betreff)
+    + "&body=" + encodeURIComponent(text);
+  window.open(url, "_blank");
 }
 
 function renderTodos() {
