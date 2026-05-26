@@ -225,12 +225,14 @@ async function loadMails() {
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
     const r = await fetch(
-      `https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$top=100&$select=id,subject,from,receivedDateTime,bodyPreview,categories&$orderby=receivedDateTime desc&$filter=receivedDateTime ge ${since}`,
+      `https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$top=100&$select=id,subject,from,receivedDateTime,bodyPreview,categories&$orderby=receivedDateTime desc`,
       { headers: { Authorization: "Bearer " + token } }
     );
     if (!r.ok) throw new Error("Graph: " + r.status);
     const data = await r.json();
-    const mails = data.value || [];
+    // Filter by date client-side ($filter + $orderby together requires special Graph index and often fails silently)
+    const sinceDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const mails = (data.value || []).filter(m => new Date(m.receivedDateTime) >= sinceDate);
 
     if (!mails.length) {
       loading.classList.remove("visible");
