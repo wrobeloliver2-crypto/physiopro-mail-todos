@@ -75,6 +75,7 @@
     .status-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 600; border-radius: 6px; padding: 3px 8px; border: 1px solid; }
     .status-todo { background: #fdf0ee; color: #a33; border-color: #e8b4ae; }
     .status-progress { background: #eef4fd; color: #1a3a6a; border-color: #aac4e8; }
+    .status-replied { background: #f0fff4; color: #1a6a3a; border-color: #90d8aa; }
 
     .card-body { padding: 12px 16px 14px; border-top: 1px solid var(--sand); background: #fdfcfa; display: none; }
     .card-body.open { display: block; }
@@ -578,29 +579,74 @@ async function showOriginal(ev, btn) {
   }
 }
 
-function forwardMail(ev, btn) {
+async function forwardMail(ev, btn) {
   ev.stopPropagation();
   const betreff = btn.dataset.betreff;
-  const vorschau = btn.dataset.vorschau;
   const vonAbsender = btn.dataset.absender;
   const fwdBetreff = (betreff.startsWith("Fwd:") || betreff.startsWith("WG:")) ? betreff : "WG: " + betreff;
-  const fwdBody = "\n\n-------- Weitergeleitete Nachricht --------\nVon: " + vonAbsender + "\nBetreff: " + betreff + "\n\n" + vorschau;
-  // Outlook Web compose URL (Empfänger leer lassen – wird manuell eingetragen)
+
+  // Lade Original-Mail Body
+  const todo = allTodos.find(t => {
+    const sid = (t.mailId||t.id||"").replace(/[^a-z0-9]/gi,"_");
+    return btn.closest(".todo-card")?.id === "c-" + sid;
+  });
+  let fwdBody = "\n\n-------- Weitergeleitete Nachricht --------\nVon: " + vonAbsender + "\nBetreff: " + betreff + "\n\n";
+
+  if (todo) {
+    try {
+      const tok = await getToken();
+      const r = await fetch("https://graph.microsoft.com/v1.0/me/messages/" + (todo.mailId||todo.id) + "?$select=body", { headers: { Authorization: "Bearer " + tok } });
+      if (r.ok) {
+        const d = await r.json();
+        const bodyText = (d.body?.content || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 2000);
+        fwdBody += bodyText;
+      }
+    } catch(e) { console.warn("Forward body:", e.message); }
+  }
+
   const url = "https://outlook.office.com/mail/deeplink/compose?subject=" + encodeURIComponent(fwdBetreff)
     + "&body=" + encodeURIComponent(fwdBody);
   window.open(url, "physiopro_mail");
 }
 
-function openMail(ev, btn) {
+async function openMail(ev, btn) {
   ev.stopPropagation();
   const absender = btn.dataset.absender;
   const betreff = btn.dataset.betreff;
-  const text = btn.dataset.text;
-  // Outlook Web compose URL
+  // Strip auto-signature – user adds their own
+  let text = (btn.dataset.text || "")
+    .replace(/\s*Mit freundlichen Grüßen[\s\S]*?PhysioPro Lübeck Team\s*/gi, "")
+    .trim();
+
   const url = "https://outlook.office.com/mail/deeplink/compose?to=" + encodeURIComponent(absender)
     + "&subject=" + encodeURIComponent(betreff)
     + "&body=" + encodeURIComponent(text);
   window.open(url, "physiopro_mail");
+
+  // Status → "antwort_gesendet" nach Klick
+  const mailId = btn.closest(".todo-card")?.id?.replace("c-", "").replace(/_/g, "") || "";
+  const todo = allTodos.find(t => (t.mailId||t.id||"").replace(/[^a-z0-9]/gi,"_") === btn.closest(".todo-card")?.id?.replace("c-",""));
+  if (todo) {
+    const mid = todo.mailId || todo.id;
+    todo.status = "antwort_gesendet";
+    renderTodos(); updateStats();
+    try {
+      const tok = await getToken();
+      // Set Outlook category
+      const cr = await fetch("https://graph.microsoft.com/v1.0/me/messages/" + mid + "?$select=categories", { headers: { Authorization: "Bearer " + tok } });
+      const cd = await cr.json();
+      const cats = (cd.categories || []).filter(c => !c.startsWith("PhysioPro"));
+      await fetch("https://graph.microsoft.com/v1.0/me/messages/" + mid, {
+        method: "PATCH", headers: { Authorization: "Bearer " + tok, "Content-Type": "application/json" },
+        body: JSON.stringify({ categories: [...cats, "PhysioPro Antwort gesendet"] })
+      });
+      // Sync to sheet
+      fetch("/.netlify/functions/todos-api", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update_field", mailId: mid, field: "status", value: "antwort_gesendet", userEmail: pca.getActiveAccount()?.username || "" })
+      }).catch(e => console.warn(e));
+    } catch(e) { console.warn("Status update:", e.message); }
+  }
 }
 
 const PCOLS = { hoch: "#e74c3c", mittel: "#f39c12", niedrig: "#55725e" };
@@ -629,8 +675,8 @@ function renderTodos() {
 
   grid.innerHTML = visible.map(t => {
     const sid = (t.id || t.mailId || '').replace(/[^a-z0-9]/gi, "_");
-    const sc = t.status === "progress" ? "status-progress" : "status-todo";
-    const sl = t.status === "progress" ? "🔵 In Arbeit" : "🔴 Todo";
+    const sc = t.status === "progress" ? "status-progress" : t.status === "antwort_gesendet" ? "status-replied" : "status-todo";
+    const sl = t.status === "progress" ? "🔵 In Arbeit" : t.status === "antwort_gesendet" ? "↩️ Antwort gesendet" : "🔴 Todo";
     const date = t.datum ? new Date(t.datum).toLocaleDateString("de-DE", { day:"2-digit", month:"short" }) : "";
     const countBadge = t.anzahl > 1 ? `<span class="count-badge">${t.anzahl}×</span>` : "";
     const hasReply = t.antwort_betreff && t.antwort_text;
