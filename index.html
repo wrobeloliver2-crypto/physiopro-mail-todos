@@ -111,6 +111,8 @@
     .reminder-row input:focus { outline: none; border-color: var(--green); }
     .note-saved { font-size: 10px; color: var(--green); margin-left: 6px; }
     .reminder-active { font-size: 10px; color: #1a6a3a; background: #d0ffe0; border-radius: 4px; padding: 2px 7px; }
+    .has-note-badge { font-size: 10px; font-weight: 600; color: #7a5a00; background: #fff5d0; border-radius: 4px; padding: 2px 7px; }
+    .has-reminder-badge { font-size: 10px; font-weight: 600; color: #1a6a3a; background: #d0ffe0; border-radius: 4px; padding: 2px 7px; }
     .btn-active { font-weight: 700; box-shadow: inset 0 0 0 1px currentColor; }
     .btn-archiving { opacity: 0.5; cursor: not-allowed; }
 
@@ -614,6 +616,9 @@ function renderTodos() {
     const hasReply = t.antwort_betreff && t.antwort_text;
     const replyHint = hasReply ? `<span class="reply-hint">✉️ Antwort vorgeschlagen</span>` : "";
     const repliedBadge = t.alreadyReplied ? `<span class="replied-badge">✅ Bereits beantwortet</span>` : "";
+    const notizBadge = (t.notiz || getNoteText(t.mailId||t.id)) ? `<span class="has-note-badge">📝 Notiz</span>` : "";
+    const reminderVal = t.erinnerung || getReminderValue(t.mailId||t.id);
+    const reminderBadge = reminderVal ? `<span class="has-reminder-badge">⏰ ${new Date(reminderVal).toLocaleDateString('de-DE', {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</span>` : "";
 
     // Reply block HTML
     const replyBlock = hasReply ? `
@@ -633,6 +638,8 @@ function renderTodos() {
           ${countBadge}
           ${replyHint}
           ${repliedBadge}
+          ${notizBadge}
+          ${reminderBadge}
           <span class="date-badge">${date}</span>
         </div>
         <div class="card-task">${esc(t.aufgabe)}</div>
