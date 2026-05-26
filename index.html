@@ -461,7 +461,7 @@ function openOriginal(ev, btn) {
   const betreff = btn.dataset.betreff;
   // webLink is already an Outlook Web URL from Graph API
   const url = webLink || ("https://outlook.office.com/mail/search?q=" + encodeURIComponent(betreff));
-  window.open(url, "_blank");
+  window.open(url, "physiopro_mail");
 }
 
 function forwardMail(ev, btn) {
@@ -474,7 +474,7 @@ function forwardMail(ev, btn) {
   // Outlook Web compose URL (Empfänger leer lassen – wird manuell eingetragen)
   const url = "https://outlook.office.com/mail/deeplink/compose?subject=" + encodeURIComponent(fwdBetreff)
     + "&body=" + encodeURIComponent(fwdBody);
-  window.open(url, "_blank");
+  window.open(url, "physiopro_mail");
 }
 
 function openMail(ev, btn) {
@@ -486,7 +486,7 @@ function openMail(ev, btn) {
   const url = "https://outlook.office.com/mail/deeplink/compose?to=" + encodeURIComponent(absender)
     + "&subject=" + encodeURIComponent(betreff)
     + "&body=" + encodeURIComponent(text);
-  window.open(url, "_blank");
+  window.open(url, "physiopro_mail");
 }
 
 const PCOLS = { hoch: "#e74c3c", mittel: "#f39c12", niedrig: "#55725e" };
