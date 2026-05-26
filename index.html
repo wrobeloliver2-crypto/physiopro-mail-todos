@@ -335,13 +335,14 @@ const PCOLS = { hoch: "#e74c3c", mittel: "#f39c12", niedrig: "#55725e" };
 
 function openOriginal(ev, webLink, absender, betreff) {
   ev.stopPropagation();
-  if (webLink) {
-    // Open directly in Outlook Web
-    window.open(webLink, "_blank");
-  } else {
-    // Fallback: open mail client to the sender
-    window.location.href = `mailto:${encodeURIComponent(absender)}?subject=${encodeURIComponent(betreff)}`;
-  }
+  const url = webLink || ("mailto:" + encodeURIComponent(absender) + "?subject=" + encodeURIComponent(betreff));
+  const a = document.createElement("a");
+  a.href = url;
+  a.target = "_blank";
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 function forwardMail(ev, betreff, vorschau, vonAbsender) {
