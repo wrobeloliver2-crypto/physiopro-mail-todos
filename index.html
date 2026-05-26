@@ -39,6 +39,7 @@
     .btn-refresh { margin-left: auto; display: flex; align-items: center; gap: 7px; background: var(--green); color: white; border: none; border-radius: 8px; padding: 7px 14px; cursor: pointer; font-size: 12px; font-weight: 500; font-family: 'DM Sans', sans-serif; }
     .btn-refresh:hover { background: var(--green2); }
     .btn-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
+    .last-updated { font-size: 11px; color: var(--muted); white-space: nowrap; }
 
     .loading-state { display: none; flex-direction: column; align-items: center; justify-content: center; padding: 60px 24px; gap: 16px; }
     .loading-state.visible { display: flex; }
@@ -144,7 +145,8 @@
         <option value="60">60 Tage</option>
       </select>
     </div>
-    <button class="btn-refresh" id="refresh-btn" onclick="loadMails()">↺ Aktualisieren</button>
+    <button class="btn-refresh" id="refresh-btn" onclick="loadMails()" title="Jetzt aktualisieren">↺</button>
+    <span class="last-updated" id="last-updated">–</span>
   </div>
 
   <div class="error-banner" id="error-banner"></div>
@@ -208,6 +210,21 @@ function showApp(account) {
   document.getElementById("user-email").textContent = account.username;
   loadMails();
 }
+
+let autoRefreshTimer = null;
+const AUTO_REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
+
+function startAutoRefresh() {
+  if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+  autoRefreshTimer = setInterval(() => {
+    if (!document.hidden) loadMails(); // only refresh if tab is visible
+  }, AUTO_REFRESH_INTERVAL);
+}
+
+// Refresh when tab becomes visible again after being hidden
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && autoRefreshTimer) loadMails();
+});
 
 async function loadMails() {
   const btn = document.getElementById("refresh-btn");
@@ -323,6 +340,11 @@ async function loadMails() {
 
     loading.classList.remove("visible");
     filterBar.style.display = "flex";
+
+    // Update last-updated timestamp and start auto-refresh
+    const now = new Date().toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+    document.getElementById("last-updated").textContent = "Zuletzt: " + now + " · auto ↺ 5 min";
+    startAutoRefresh();
 
   } catch(e) {
     loading.classList.remove("visible");
