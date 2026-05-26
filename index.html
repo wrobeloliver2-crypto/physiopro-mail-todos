@@ -209,7 +209,20 @@ function showApp(account) {
   document.getElementById("login-screen").style.display = "none";
   document.getElementById("app").style.display = "flex";
   document.getElementById("user-email").textContent = account.username;
-  loadMails();
+
+  // Use cache if less than 5 minutes old
+  const lastLoad = parseInt(sessionStorage.getItem("lastLoadTime") || "0");
+  const cached = sessionStorage.getItem("cachedTodos");
+  if (cached && Date.now() - lastLoad < AUTO_REFRESH_INTERVAL) {
+    allTodos = JSON.parse(cached);
+    renderTodos(); updateStats();
+    document.getElementById("filter-bar").style.display = "flex";
+    const t = new Date(lastLoad).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+    document.getElementById("last-updated").textContent = "Zuletzt: " + t + " · auto ↺ 5 min";
+    startAutoRefresh();
+  } else {
+    loadMails();
+  }
 }
 
 let autoRefreshTimer = null;
@@ -222,9 +235,13 @@ function startAutoRefresh() {
   }, AUTO_REFRESH_INTERVAL);
 }
 
-// Refresh when tab becomes visible again after being hidden
+// Refresh when tab becomes visible only if cache is older than 5 minutes
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden && autoRefreshTimer) loadMails();
+  if (!document.hidden) {
+    const lastLoad = parseInt(sessionStorage.getItem("lastLoadTime") || "0");
+    if (Date.now() - lastLoad > AUTO_REFRESH_INTERVAL) loadMails();
+    else if (allTodos.length > 0) { renderTodos(); updateStats(); }
+  }
 });
 
 async function loadMails() {
@@ -341,6 +358,10 @@ async function loadMails() {
 
     loading.classList.remove("visible");
     filterBar.style.display = "flex";
+
+    // Cache todos and timestamp
+    sessionStorage.setItem("cachedTodos", JSON.stringify(allTodos));
+    sessionStorage.setItem("lastLoadTime", Date.now().toString());
 
     // Update last-updated timestamp and start auto-refresh
     const now = new Date().toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
