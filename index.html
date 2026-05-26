@@ -67,7 +67,8 @@
     .reply-hint { font-size: 10px; font-weight: 600; color: #1a3a6a; background: #eef4fd; border-radius: 4px; padding: 2px 7px; }
     .replied-badge { font-size: 10px; font-weight: 600; color: #2a6a2a; background: #e8f5e8; border-radius: 4px; padding: 2px 7px; border: 1px solid #9acaaa; }
     .card-task { font-size: 14px; font-weight: 600; color: var(--dark); line-height: 1.4; margin-bottom: 6px; }
-    .card-preview { font-size: 12px; color: var(--muted); line-height: 1.5; margin-bottom: 8px; }
+    .card-preview { font-size: 12px; color: var(--muted); line-height: 1.5; margin-bottom: 6px; }
+    .card-from-inline { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
     .card-details-inline { font-size: 12px; color: var(--text); line-height: 1.6; background: var(--sand); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; border-left: 3px solid var(--green); display: none; }
     .card-details-inline.open { display: block; }
     .status-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 600; border-radius: 6px; padding: 3px 8px; border: 1px solid; }
@@ -445,6 +446,7 @@ function renderTodos() {
         </div>
         <div class="card-task">${esc(t.aufgabe)}</div>
         <div class="card-preview">${esc(t.vorschau||"")}</div>
+        <div class="card-from-inline">📨 ${esc(t.absender)}</div>
         <div class="card-details-inline" id="d-${sid}">${esc(t.details||"")}</div>
         <div class="status-badge ${sc}">${sl}</div>
       </div>
