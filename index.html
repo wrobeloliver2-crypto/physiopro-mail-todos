@@ -289,17 +289,17 @@ async function loadMails(deltaOnly = false) {
   errorBanner.classList.remove("visible");
 
   // If delta: keep showing existing todos while loading
+  loading.classList.add("visible");
   if (!deltaOnly) {
-    loading.classList.add("visible");
     grid.innerHTML = "";
     filterBar.style.display = "none";
   } else {
     loadingText.textContent = "Delta-Sync…";
-    loading.classList.add("visible");
   }
 
   try {
     loadingText.textContent = "Authentifizierung…";
+    console.log("loadMails called, deltaOnly=", deltaOnly, "cacheAge=", cacheAge());
     token = await getToken();
 
     const { todos: cachedTodos, deltaLink } = loadCache();
@@ -311,7 +311,12 @@ async function loadMails(deltaOnly = false) {
       // ── DELTA: only fetch changed mails since last sync ──
       loadingText.textContent = "Prüfe neue Mails (Delta)…";
       const r = await fetch(deltaLink, { headers: { Authorization: "Bearer " + token } });
-      if (!r.ok) throw new Error("Delta: " + r.status);
+      if (!r.ok) {
+        // Delta link expired or invalid – fall back to full load
+        console.warn("Delta fehlgeschlagen (" + r.status + "), starte Vollsync");
+        sessionStorage.removeItem("deltaLink");
+        return loadMails(false);
+      }
       const data = await r.json();
       newMails = (data.value || []).filter(m => m.parentFolderId !== undefined || m["@removed"] === undefined);
       nextDeltaLink = data["@odata.deltaLink"] || deltaLink;
@@ -334,7 +339,7 @@ async function loadMails(deltaOnly = false) {
 
       // First call gets delta link for future syncs
       const r = await fetch(
-        "https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages/delta?$select=id,subject,from,receivedDateTime,bodyPreview,categories,webLink&$orderby=receivedDateTime desc",
+        "https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages/delta?$select=id,subject,from,receivedDateTime,bodyPreview,categories,webLink",
         { headers: { Authorization: "Bearer " + token } }
       );
       if (!r.ok) throw new Error("Graph: " + r.status);
