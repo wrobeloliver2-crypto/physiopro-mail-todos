@@ -5,7 +5,8 @@ exports.handler = async (event) => {
     const apiKey = process.env.ANTHROPIC_API_KEY;
 
     const idMap = {};
-    const sample = mails.slice(0, 20).map((m, i) => {
+    // Max 10 mails to stay within 10s Netlify timeout
+    const sample = mails.slice(0, 10).map((m, i) => {
       const shortId = "m" + i;
       idMap[shortId] = m.id;
       return { id: shortId, betreff: m.betreff || "", absender: m.absender || "", datum: m.datum || "", text: (m.text || "").slice(0, 300) };
@@ -15,47 +16,25 @@ exports.handler = async (event) => {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
       body: JSON.stringify({
-        model: "claude-sonnet-4-5",
-        max_tokens: 8000,
-        system: `Du bist ein Assistent für die Physiotherapiepraxis PhysioPro Lübeck und verarbeitest eingehende E-Mails.
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 6000,
+        system: `Du bist ein Assistent für die Physiotherapiepraxis PhysioPro Lübeck.
 
-AUFGABE: Wandle JEDE E-Mail in ein Todo um. Keine Ausnahmen außer den drei unten genannten.
+REGEL: Wandle JEDE Mail in ein Todo um. Keine Diskussion. Nur 3 Ausnahmen:
+1. Newsletter / Massen-Werbemail (kein persönlicher Bezug)
+2. Absender oder Betreff enthält "getmyinvoices"
+3. Reine technische Statusmails (z.B. "Backup OK")
 
-EINZIGE AUSNAHMEN – nur diese drei Typen ignorieren:
-1. Newsletter / Werbe-Mails (kein persönlicher Bezug zur Praxis, Massenversand)
-2. GetMyInvoices-Automaten (Absender oder Betreff enthält "getmyinvoices")  
-3. Reine technische Systemstatus-Mails ohne Handlung (z.B. "Backup OK", "Server läuft")
+Alle anderen Mails → Todo. Immer. Auch wenn Handlungsbedarf unklar.
 
-ALLES ANDERE ist ein Todo – auch wenn du glaubst es sei unwichtig. Beispiele die IMMER erfasst werden:
-- Präventionsbescheinigungen, Krankenkassen-Nachweise, Teilnahmebestätigungen
-- Terminanfragen, Absagen, Umbuchungen
-- Bewerbungen
-- Zahlungsprobleme, Mahnungen, Rücklastschriften
-- Kundenanfragen jeder Art
-- Lieferanten, Dienstleister, Behörden
-- Interne Weiterleitungen
-- Alles wo jemand eine Antwort oder Aktion erwartet
+ANTWORT: Wenn die Mail eine Antwort von der Praxis erwartet → antwort_betreff + antwort_text ausfüllen (professionell, freundlich, auf Deutsch, Unterschrift "Mit freundlichen Grüßen\nIhr PhysioPro Lübeck Team"). Nur bei rein internen Aufgaben → null.
 
-DEDUPLIZIERUNG: Exakt gleiche Mails vom gleichen Absender → eine Karte, neueste ID, "anzahl" = Anzahl.
+DEDUPLIZIERUNG: Gleiche Mails vom gleichen Absender → eine Karte, neueste ID.
 
-ANTWORT-MAIL: Erstelle IMMER einen Antwort-Entwurf wenn die Mail eine Reaktion der Praxis erwartet (Anfragen, Dokumente, Terminwünsche, Bewerbungen etc.). Nur bei reinen internen Aufgaben ohne Außenkommunikation (z.B. Zahlung intern prüfen) kannst du null setzen.
+JSON-Felder: id, aufgabe, vorschau, details, absender, datum, prioritaet (hoch/mittel/niedrig), kategorie (Finanzen|Mitgliedschaften|Kundenanfragen|Dokumentenanfragen|Personalwesen|Kundenfollow-up|Behörden|Sonstiges), anzahl, antwort_betreff, antwort_text
 
-Felder pro Todo:
-- "id": Mail-ID
-- "aufgabe": Präzise Handlungsanweisung mit Namen/Details
-- "vorschau": 1 Satz was passiert ist / was gebraucht wird  
-- "details": Konkreter Handlungsplan (was tun, wen kontaktieren, Referenz, Zeitrahmen)
-- "absender": E-Mail-Adresse
-- "datum": Datum der neuesten Mail
-- "prioritaet": "hoch" | "mittel" | "niedrig"
-- "kategorie": Finanzen | Mitgliedschaften | Kundenanfragen | Dokumentenanfragen | Personalwesen | Kundenfollow-up | Behörden | Sonstiges
-- "anzahl": Zahl
-- "antwort_betreff": Betreff der Antwort-Mail oder null
-- "antwort_text": Fertiger deutscher E-Mail-Text, professionell und freundlich. Anrede mit Namen wenn bekannt. Unterschrift: "Mit freundlichen Grüßen\nIhr PhysioPro Lübeck Team" – oder null nur bei rein internen Aufgaben
-
-Antworte AUSSCHLIESSLICH mit einem JSON-Array, kein Markdown, keine Erklärungen:
-[{"id":"m0","aufgabe":"...","vorschau":"...","details":"...","absender":"...","datum":"...","prioritaet":"mittel","kategorie":"Sonstiges","anzahl":1,"antwort_betreff":"...","antwort_text":"..."}]`,
-        messages: [{ role: "user", content: `Verarbeite diese ${sample.length} E-Mails. JEDE wird ein Todo außer Newsletter, GetMyInvoices und technische Systemmeldungen:\n\n${JSON.stringify(sample)}` }]
+Nur JSON-Array zurückgeben, kein Text drumherum.`,
+        messages: [{ role: "user", content: `Mails (ALLE außer Newsletter/GetMyInvoices/Systemmeldungen als Todo erfassen):\n\n${JSON.stringify(sample)}` }]
       })
     });
 
