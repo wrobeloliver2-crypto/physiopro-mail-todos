@@ -235,7 +235,7 @@ async function loadMails() {
     let ab;
     try { ab = JSON.parse(arText); } catch(e) { throw new Error("JSON parse fehler: " + arText.slice(0,200)); }
     if (!ar.ok) throw new Error("Analyse: " + ar.status + " " + (ab.error || ""));
-    alert("Todos: " + (ab.todos||[]).length + "\nClaude: " + (ab.rawText||"kein rawText").slice(0,300));
+    
     
     allTodos = (ab.todos || []).map(t => {
       const mail = mails.find(m => m.id === t.id);
