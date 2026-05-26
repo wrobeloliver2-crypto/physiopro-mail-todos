@@ -198,7 +198,7 @@
 const CLIENT_ID = "a5ace1f0-7fab-4b54-af45-2f22edb72753";
 const TENANT_ID = "84c5926a-a7f0-4d30-bfe6-8d445df9a2ba";
 const SCOPES = ["Mail.Read", "Mail.ReadWrite"];
-const BATCH_SIZE = 8;
+const BATCH_SIZE = 5;
 const AUTO_REFRESH_INTERVAL = 5 * 60 * 1000;
 
 const msal = window.msal;
@@ -476,6 +476,9 @@ async function loadMails(deltaOnly = false) {
               action: "bulk_upsert",
               todos: batchTodos.map(t => ({ ...t, mailId: t.id }))
             })
+          }).then(r => r.json()).then(d => {
+            if (d.ok) console.log("Sheet gespeichert:", d.count, "Todos");
+            else console.warn("Sheet Fehler:", JSON.stringify(d));
           }).catch(e => console.warn("Sheet speichern:", e.message));
         }
       }
