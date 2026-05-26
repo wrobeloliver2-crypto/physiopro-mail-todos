@@ -15,15 +15,8 @@
     }
     html, body { height: 100%; background: var(--cream); color: var(--text); font-family: 'DM Sans', sans-serif; }
 
-    #login-screen {
-      display: flex; align-items: center; justify-content: center;
-      min-height: 100vh; background: var(--dark);
-    }
-    .login-card {
-      background: var(--cream); border-radius: 20px;
-      padding: 48px 44px; text-align: center; width: 360px;
-      box-shadow: 0 24px 80px rgba(0,0,0,0.35);
-    }
+    #login-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: var(--dark); }
+    .login-card { background: var(--cream); border-radius: 20px; padding: 48px 44px; text-align: center; width: 360px; box-shadow: 0 24px 80px rgba(0,0,0,0.35); }
     .login-logo { width: 56px; height: 56px; background: var(--green); border-radius: 14px; margin: 0 auto 24px; display: flex; align-items: center; justify-content: center; font-size: 26px; }
     .login-title { font-family: 'Fraunces', serif; font-size: 26px; color: var(--dark); margin-bottom: 6px; }
     .login-sub { font-size: 13px; color: var(--muted); margin-bottom: 32px; line-height: 1.5; }
@@ -38,9 +31,15 @@
     .btn-logout { background: transparent; color: rgba(255,255,255,0.4); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 11px; }
     .btn-logout:hover { color: white; border-color: rgba(255,255,255,0.4); }
 
-    .stats-bar { background: var(--sand); border-bottom: 1px solid var(--warm); padding: 10px 24px; display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+    .stats-bar { background: var(--sand); border-bottom: 1px solid var(--warm); padding: 10px 24px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
     .stat-pill { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
     .stat-pill strong { color: var(--text); font-size: 14px; }
+
+    /* Zeitraum-Selector */
+    .period-select { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+    .period-select label { white-space: nowrap; }
+    .period-select select { border: 1px solid var(--warm); background: white; color: var(--text); border-radius: 7px; padding: 4px 8px; font-size: 12px; font-family: 'DM Sans', sans-serif; cursor: pointer; }
+
     .btn-refresh { margin-left: auto; display: flex; align-items: center; gap: 7px; background: var(--green); color: white; border: none; border-radius: 8px; padding: 7px 14px; cursor: pointer; font-size: 12px; font-weight: 500; font-family: 'DM Sans', sans-serif; }
     .btn-refresh:hover { background: var(--green2); }
     .btn-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -68,19 +67,15 @@
     .date-badge { font-size: 10px; color: var(--muted); margin-left: auto; }
     .count-badge { font-size: 10px; font-weight: 700; background: var(--dark); color: white; border-radius: 10px; padding: 2px 7px; }
     .card-task { font-size: 14px; font-weight: 600; color: var(--dark); line-height: 1.4; margin-bottom: 6px; }
-    .card-task.done { text-decoration: line-through; opacity: 0.45; }
     .card-preview { font-size: 12px; color: var(--muted); line-height: 1.5; margin-bottom: 8px; }
-
-    /* Details-Box direkt sichtbar unter Vorschau */
     .card-details-inline { font-size: 12px; color: var(--text); line-height: 1.6; background: var(--sand); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; border-left: 3px solid var(--green); display: none; }
     .card-details-inline.open { display: block; }
-
     .status-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 600; border-radius: 6px; padding: 3px 8px; border: 1px solid; }
     .status-todo { background: #fdf0ee; color: #a33; border-color: #e8b4ae; }
     .status-progress { background: #eef4fd; color: #1a3a6a; border-color: #aac4e8; }
-    .status-done { background: #eef6f0; color: #1a4a2a; border-color: #9acaaa; }
 
-    .card-body { padding: 10px 16px 14px; border-top: 1px solid var(--sand); background: #fdfcfa; }
+    .card-body { padding: 10px 16px 14px; border-top: 1px solid var(--sand); background: #fdfcfa; display: none; }
+    .card-body.open { display: block; }
     .card-from { font-size: 11px; color: var(--muted); margin-bottom: 12px; }
     .card-actions { display: flex; gap: 6px; flex-wrap: wrap; }
     .action-btn { padding: 6px 12px; border-radius: 7px; border: 1px solid; cursor: pointer; font-size: 11px; font-weight: 500; font-family: 'DM Sans', sans-serif; transition: all 0.15s; }
@@ -88,12 +83,17 @@
     .btn-progress { background: #eef4fd; color: #1a3a6a; border-color: #aac4e8; }
     .btn-done { background: #eef6f0; color: #1a4a2a; border-color: #9acaaa; }
     .btn-active { font-weight: 700; box-shadow: inset 0 0 0 1px currentColor; }
+    .btn-archiving { opacity: 0.5; cursor: not-allowed; }
 
     .empty-state { grid-column: 1/-1; text-align: center; padding: 60px 24px; color: var(--muted); }
     .empty-icon { font-size: 40px; margin-bottom: 14px; }
     .empty-title { font-family: 'Fraunces', serif; font-size: 20px; color: var(--dark); margin-bottom: 8px; }
     .error-banner { margin: 16px 24px; padding: 12px 16px; background: #fdf0ee; border: 1px solid #e8b4ae; border-radius: 10px; font-size: 12px; color: #a33; display: none; }
     .error-banner.visible { display: block; }
+
+    /* Fade-out animation when archiving */
+    .todo-card.removing { animation: fadeOut 0.4s ease forwards; }
+    @keyframes fadeOut { to { opacity: 0; transform: scale(0.95); } }
   </style>
 </head>
 <body>
@@ -121,11 +121,19 @@
   </header>
 
   <div class="stats-bar">
-    <div class="stat-pill">📬 <strong id="stat-total">0</strong> analysiert</div>
+    <div class="stat-pill">📬 <strong id="stat-total">0</strong> Aufgaben</div>
     <div class="stat-pill">🔴 <strong id="stat-todo">0</strong> offen</div>
     <div class="stat-pill">🔵 <strong id="stat-progress">0</strong> in Arbeit</div>
-    <div class="stat-pill">🟢 <strong id="stat-done">0</strong> erledigt</div>
-    <button class="btn-refresh" id="refresh-btn" onclick="loadMails()">↺ Mails laden</button>
+    <div class="period-select">
+      <label for="period-sel">Zeitraum:</label>
+      <select id="period-sel" onchange="loadMails()">
+        <option value="7">7 Tage</option>
+        <option value="14" selected>14 Tage</option>
+        <option value="30">30 Tage</option>
+        <option value="60">60 Tage</option>
+      </select>
+    </div>
+    <button class="btn-refresh" id="refresh-btn" onclick="loadMails()">↺ Aktualisieren</button>
   </div>
 
   <div class="error-banner" id="error-banner"></div>
@@ -138,7 +146,6 @@
     <button class="filter-btn active" onclick="setFilter('all',this)">Alle <span class="filter-count" id="fc-all">0</span></button>
     <button class="filter-btn" onclick="setFilter('todo',this)">🔴 Todo <span class="filter-count" id="fc-todo">0</span></button>
     <button class="filter-btn" onclick="setFilter('progress',this)">🔵 In Arbeit <span class="filter-count" id="fc-progress">0</span></button>
-    <button class="filter-btn" onclick="setFilter('done',this)">🟢 Erledigt <span class="filter-count" id="fc-done">0</span></button>
     <span id="cat-filters"></span>
   </div>
 
@@ -198,6 +205,7 @@ async function loadMails() {
   const grid = document.getElementById("todo-grid");
   const filterBar = document.getElementById("filter-bar");
   const errorBanner = document.getElementById("error-banner");
+  const days = parseInt(document.getElementById("period-sel").value) || 14;
 
   btn.disabled = true;
   loading.classList.add("visible");
@@ -209,17 +217,22 @@ async function loadMails() {
     loadingText.textContent = "Authentifizierung…";
     token = await getToken();
 
-    loadingText.textContent = "Lade E-Mails…";
-    const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
-    const r = await fetch("https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$top=100&$select=id,subject,from,receivedDateTime,bodyPreview,categories&$orderby=receivedDateTime desc", { headers: { Authorization: "Bearer " + token } });
+    loadingText.textContent = `Lade E-Mails (letzte ${days} Tage)…`;
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+    // Fetch mails from inbox only (already archived = already done = skip)
+    const r = await fetch(
+      `https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$top=100&$select=id,subject,from,receivedDateTime,bodyPreview,categories&$orderby=receivedDateTime desc&$filter=receivedDateTime ge ${since}`,
+      { headers: { Authorization: "Bearer " + token } }
+    );
     if (!r.ok) throw new Error("Graph: " + r.status);
     const data = await r.json();
-    const mails = (data.value || []).filter(m => new Date(m.receivedDateTime) >= since);
+    const mails = data.value || [];
 
     if (!mails.length) {
       loading.classList.remove("visible");
       filterBar.style.display = "flex";
-      grid.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-title">Keine E-Mails</div></div>';
+      grid.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-title">Keine E-Mails im gewählten Zeitraum</div></div>';
       return;
     }
 
@@ -240,15 +253,17 @@ async function loadMails() {
     let ab;
     try { ab = JSON.parse(arText); } catch(e) { throw new Error("JSON parse fehler: " + arText.slice(0,200)); }
     if (!ar.ok) throw new Error("Analyse: " + ar.status + " " + (ab.error || ""));
-    
+
     allTodos = (ab.todos || []).map(t => {
       const mail = mails.find(m => m.id === t.id);
       const cats = mail?.categories || [];
       let status = "todo";
-      if (cats.some(c => c.includes("Erledigt"))) status = "done";
-      else if (cats.some(c => c.includes("Arbeit"))) status = "progress";
+      if (cats.some(c => c.includes("Arbeit"))) status = "progress";
+      // "Erledigt" category should not appear here since those are archived,
+      // but handle edge case just in case:
+      if (cats.some(c => c.includes("Erledigt"))) return null;
       return { ...t, status, anzahl: t.anzahl || 1 };
-    });
+    }).filter(Boolean);
 
     renderTodos();
     updateStats();
@@ -268,15 +283,19 @@ const PCOLS = { hoch: "#e74c3c", mittel: "#f39c12", niedrig: "#55725e" };
 
 function renderTodos() {
   const grid = document.getElementById("todo-grid");
-  const visible = allTodos.filter(t => activeFilter === "all" || t.status === activeFilter || t.kategorie === activeFilter);
+  // Erledigt never shown – filter to only todo + progress
+  const visible = allTodos.filter(t =>
+    t.status !== "done" &&
+    (activeFilter === "all" || t.status === activeFilter || t.kategorie === activeFilter)
+  );
   if (!visible.length) {
-    grid.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-title">Alles erledigt!</div></div>';
+    grid.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-title">Keine offenen Aufgaben!</div><p style="font-size:13px;margin-top:8px">Alles erledigt oder kein Handlungsbedarf im gewählten Zeitraum.</p></div>';
     return;
   }
   grid.innerHTML = visible.map(t => {
     const sid = t.id.replace(/[^a-z0-9]/gi, "_");
-    const sc = t.status === "done" ? "status-done" : t.status === "progress" ? "status-progress" : "status-todo";
-    const sl = t.status === "done" ? "🟢 Erledigt" : t.status === "progress" ? "🔵 In Arbeit" : "🔴 Todo";
+    const sc = t.status === "progress" ? "status-progress" : "status-todo";
+    const sl = t.status === "progress" ? "🔵 In Arbeit" : "🔴 Todo";
     const date = t.datum ? new Date(t.datum).toLocaleDateString("de-DE", { day:"2-digit", month:"short" }) : "";
     const countBadge = t.anzahl > 1 ? `<span class="count-badge">${t.anzahl}×</span>` : "";
     return `<div class="todo-card" id="c-${sid}">
@@ -287,17 +306,17 @@ function renderTodos() {
           ${countBadge}
           <span class="date-badge">${date}</span>
         </div>
-        <div class="card-task ${t.status==='done'?'done':''}">${esc(t.aufgabe)}</div>
+        <div class="card-task">${esc(t.aufgabe)}</div>
         <div class="card-preview">${esc(t.vorschau||"")}</div>
         <div class="card-details-inline" id="d-${sid}">${esc(t.details||"")}</div>
         <div class="status-badge ${sc}">${sl}</div>
       </div>
-      <div class="card-body" id="b-${sid}" style="display:none">
+      <div class="card-body" id="b-${sid}">
         <div class="card-from">📨 ${esc(t.absender)}</div>
         <div class="card-actions">
-          <button class="action-btn btn-todo ${t.status==='todo'?'btn-active':''}" onclick="setStatus('${t.id}','todo')" ${t.status==='todo'?'disabled':''}>🔴 Todo</button>
-          <button class="action-btn btn-progress ${t.status==='progress'?'btn-active':''}" onclick="setStatus('${t.id}','progress')" ${t.status==='progress'?'disabled':''}>🔵 In Arbeit</button>
-          <button class="action-btn btn-done ${t.status==='done'?'btn-active':''}" onclick="setStatus('${t.id}','done')" ${t.status==='done'?'disabled':''}>🟢 Erledigt</button>
+          <button class="action-btn btn-todo ${t.status==='todo'?'btn-active':''}" onclick="setStatus(event,'${t.id}','todo')" ${t.status==='todo'?'disabled':''}>🔴 Todo</button>
+          <button class="action-btn btn-progress ${t.status==='progress'?'btn-active':''}" onclick="setStatus(event,'${t.id}','progress')" ${t.status==='progress'?'disabled':''}>🔵 In Arbeit</button>
+          <button class="action-btn btn-done" onclick="markDone(event,'${t.id}','${sid}')">✅ Erledigt & Archivieren</button>
         </div>
       </div>
     </div>`;
@@ -307,17 +326,17 @@ function renderTodos() {
 
 function toggle(sid) {
   document.getElementById("d-" + sid)?.classList.toggle("open");
-  const body = document.getElementById("b-" + sid);
-  if (body) body.style.display = body.style.display === "none" ? "block" : "none";
+  document.getElementById("b-" + sid)?.classList.toggle("open");
 }
 
-async function setStatus(mailId, newStatus) {
+async function setStatus(ev, mailId, newStatus) {
+  ev.stopPropagation();
   try {
     token = await getToken();
     const cr = await fetch(`https://graph.microsoft.com/v1.0/me/messages/${mailId}?$select=categories`, { headers: { Authorization: "Bearer " + token } });
     const cd = await cr.json();
     const cats = (cd.categories || []).filter(c => !c.startsWith("PhysioPro"));
-    const map = { todo: "PhysioPro Todo", progress: "PhysioPro In Arbeit", done: "PhysioPro Erledigt" };
+    const map = { todo: "PhysioPro Todo", progress: "PhysioPro In Arbeit" };
     await fetch(`https://graph.microsoft.com/v1.0/me/messages/${mailId}`, {
       method: "PATCH", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
       body: JSON.stringify({ categories: [...cats, map[newStatus]] })
@@ -328,6 +347,52 @@ async function setStatus(mailId, newStatus) {
   } catch(e) { alert("Fehler: " + e.message); }
 }
 
+async function markDone(ev, mailId, sid) {
+  ev.stopPropagation();
+  const card = document.getElementById("c-" + sid);
+  const btn = ev.target;
+  btn.classList.add("btn-archiving");
+  btn.disabled = true;
+  btn.textContent = "⏳ Archivieren…";
+
+  try {
+    token = await getToken();
+
+    // 1. Kategorie "PhysioPro Erledigt" setzen
+    const cr = await fetch(`https://graph.microsoft.com/v1.0/me/messages/${mailId}?$select=categories`, { headers: { Authorization: "Bearer " + token } });
+    const cd = await cr.json();
+    const cats = (cd.categories || []).filter(c => !c.startsWith("PhysioPro"));
+    await fetch(`https://graph.microsoft.com/v1.0/me/messages/${mailId}`, {
+      method: "PATCH", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({ categories: [...cats, "PhysioPro Erledigt"], isRead: true })
+    });
+
+    // 2. In Archiv verschieben (Graph: /move mit destinationId "archive")
+    const moveRes = await fetch(`https://graph.microsoft.com/v1.0/me/messages/${mailId}/move`, {
+      method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({ destinationId: "archive" })
+    });
+    if (!moveRes.ok) {
+      // Fallback: als gelesen markieren falls Archiv nicht verfügbar
+      console.warn("Archivierung fehlgeschlagen, Mail bleibt in Inbox");
+    }
+
+    // 3. Karte animiert entfernen
+    if (card) {
+      card.classList.add("removing");
+      setTimeout(() => {
+        allTodos = allTodos.filter(t => t.id !== mailId);
+        renderTodos(); updateStats();
+      }, 400);
+    }
+  } catch(e) {
+    btn.classList.remove("btn-archiving");
+    btn.disabled = false;
+    btn.textContent = "✅ Erledigt & Archivieren";
+    alert("Fehler: " + e.message);
+  }
+}
+
 function setFilter(f, el) {
   activeFilter = f;
   document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
@@ -336,20 +401,20 @@ function setFilter(f, el) {
 }
 
 function updateStats() {
-  document.getElementById("stat-total").textContent = allTodos.length;
-  document.getElementById("stat-todo").textContent = allTodos.filter(t => t.status === "todo").length;
-  document.getElementById("stat-progress").textContent = allTodos.filter(t => t.status === "progress").length;
-  document.getElementById("stat-done").textContent = allTodos.filter(t => t.status === "done").length;
+  const active = allTodos.filter(t => t.status !== "done");
+  document.getElementById("stat-total").textContent = active.length;
+  document.getElementById("stat-todo").textContent = active.filter(t => t.status === "todo").length;
+  document.getElementById("stat-progress").textContent = active.filter(t => t.status === "progress").length;
 }
 
 function updateFilterCounts() {
-  document.getElementById("fc-all").textContent = allTodos.length;
-  document.getElementById("fc-todo").textContent = allTodos.filter(t => t.status === "todo").length;
-  document.getElementById("fc-progress").textContent = allTodos.filter(t => t.status === "progress").length;
-  document.getElementById("fc-done").textContent = allTodos.filter(t => t.status === "done").length;
-  const cats = [...new Set(allTodos.map(t => t.kategorie).filter(Boolean))];
+  const active = allTodos.filter(t => t.status !== "done");
+  document.getElementById("fc-all").textContent = active.length;
+  document.getElementById("fc-todo").textContent = active.filter(t => t.status === "todo").length;
+  document.getElementById("fc-progress").textContent = active.filter(t => t.status === "progress").length;
+  const cats = [...new Set(active.map(t => t.kategorie).filter(Boolean))];
   document.getElementById("cat-filters").innerHTML = cats.map(c =>
-    `<button class="filter-btn" onclick="setFilter('${c}',this)">${esc(c)} <span class="filter-count">${allTodos.filter(t=>t.kategorie===c).length}</span></button>`
+    `<button class="filter-btn" onclick="setFilter('${c}',this)">${esc(c)} <span class="filter-count">${active.filter(t=>t.kategorie===c).length}</span></button>`
   ).join("");
 }
 
