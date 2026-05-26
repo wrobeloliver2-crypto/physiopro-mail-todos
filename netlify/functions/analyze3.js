@@ -4,7 +4,6 @@ exports.handler = async (event) => {
     const { mails = [] } = JSON.parse(event.body);
     const apiKey = process.env.ANTHROPIC_API_KEY;
 
-    // Map long Outlook IDs to short ones
     const idMap = {};
     const sample = mails.slice(0, 20).map((m, i) => {
       const shortId = "m" + i;
@@ -18,35 +17,51 @@ exports.handler = async (event) => {
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
         max_tokens: 4000,
-        system: `Du analysierst E-Mails einer Physiotherapiepraxis (PhysioPro Lübeck) und erstellst klare, handlungsorientierte Todos.
+        system: `Du analysierst E-Mails einer Physiotherapiepraxis (PhysioPro Lübeck) und erstellst handlungsorientierte Todos.
 
-IGNORIERE folgende Mail-Typen komplett (gib sie NICHT zurück):
-- Automatische Benachrichtigungen von GetMyInvoices (Absender enthält "getmyinvoices" oder Betreff enthält "Benachrichtigung" + "GetMyInvoices")
-- Reine Bestätigungsmails ohne Handlungsbedarf
-- Newsletter, Marketing-Mails
-- Automatische Systembenachrichtigungen ohne konkreten Handlungsbedarf
+Im Zweifel IMMER als Todo erfassen – lieber zu viel als zu wenig.
 
-DEDUPLIZIERUNG: Wenn mehrere Mails dasselbe Thema betreffen (z.B. mehrere fehlgeschlagene Zahlungen desselben Typs, mehrere Probetraining-Anfragen), fasse sie zu EINER Karte zusammen. Verwende die ID der neuesten Mail. Füge im Feld "anzahl" die Anzahl der zusammengefassten Mails ein (1 wenn nur eine).
+ERFASSE ALS TODO – alle Mails bei denen jemand etwas von der Praxis braucht oder die Praxis handeln muss:
+- Patientenanfragen jeder Art: Terminwünsche, Absagen, Umbuchungen, Rückfragen zur Behandlung
+- Dokumentenanfragen: Teilnahmebestätigungen, Krankenkassen-Nachweise, Atteste, Rezepte, Bescheinigungen, Rechnungskopien
+- Neue Bewerbungen oder Initiativbewerbungen
+- Zahlungsprobleme: Rücklastschriften, fehlgeschlagene Abbuchungen, offene Rechnungen
+- Membership-Ereignisse: Neukauf, Kündigung, Änderungswünsche
+- Probetraining-Anfragen (auch automatische HubSpot-Benachrichtigungen dazu)
+- Krankenkassen- oder Versicherungskorrespondenz
+- Lieferanten- oder Dienstleister-Anfragen die eine Antwort oder Aktion erfordern
+- Behörden- oder Amtspost
+- Beschwerden oder Reklamationen
+- Follow-up-Erinnerungen die noch offen sind
+- Sonstige Mails bei denen eindeutig eine Reaktion erwartet wird
 
-Für jede Mail MIT echtem Handlungsbedarf:
-- "aufgabe": Präzise Handlungsanweisung (z.B. "Rücklastschrift Julia Pawellek prüfen und Zahlung klären" statt nur "Zahlungsausfall beheben")
-- "vorschau": 1 Satz was konkret passiert ist (z.B. "Membership-Abbuchung €X fehlgeschlagen – Konto nicht gedeckt")
-- "details": Konkreter Handlungsplan: Was genau tun? Wen kontaktieren? Welche Nummer/Referenz? Zeitrahmen?
-- "absender": E-Mail-Adresse
-- "datum": Datum der neuesten Mail
-- "prioritaet": "hoch" (Zahlung, dringend), "mittel" (Kundenanfrage), "niedrig" (Info)
-- "kategorie": Eine von: Finanzen, Mitgliedschaften, Kundenanfragen, Personalwesen, Kundenfollow-up, Sonstiges
-- "anzahl": Anzahl zusammengefasster Mails (Zahl)
+IGNORIERE NUR diese Typen (wirklich kein Handlungsbedarf):
+- Automatische GetMyInvoices-Benachrichtigungen (Absender/Betreff enthält "getmyinvoices")
+- Reine Zahlungsbestätigungen / Buchungsbestätigungen ohne Folgeaktion
+- Newsletter und Marketing-Mails
+- Automatische System-Status-Meldungen ohne Handlungsbedarf (z.B. "Backup erfolgreich")
+
+DEDUPLIZIERUNG: Mehrere Mails zum selben Thema (z.B. 3 Probetraining-Anfragen) → eine Karte, ID der neuesten Mail, Feld "anzahl" = Anzahl.
+
+Für jedes Todo:
+- "aufgabe": Konkrete Handlungsanweisung mit Namen/Details wenn bekannt (z.B. "Teilnahmebestätigung für Krankenkasse an [Name] ausstellen und senden")
+- "vorschau": 1 Satz was die Person braucht oder was passiert ist
+- "details": Handlungsplan – was genau tun, wen kontaktieren, welche Unterlagen, Zeitrahmen
+- "absender": E-Mail-Adresse des Absenders
+- "datum": Datum der (neuesten) Mail
+- "prioritaet": "hoch" (Zahlung/dringend/Frist), "mittel" (Kundenanfrage/Dokument), "niedrig" (Info/kein Zeitdruck)
+- "kategorie": Finanzen | Mitgliedschaften | Kundenanfragen | Dokumentenanfragen | Personalwesen | Kundenfollow-up | Behörden | Sonstiges
+- "anzahl": Anzahl zusammengefasster Mails
 
 Antworte NUR mit reinem JSON-Array (kein Markdown, keine Backticks):
-[{"id":"m0","aufgabe":"...","vorschau":"...","details":"...","absender":"email","datum":"datum","prioritaet":"mittel","kategorie":"Finanzen","anzahl":1}]`,
-        messages: [{ role: "user", content: `Analysiere diese Mails und gib alle mit echtem Handlungsbedarf zurück (ignoriere automatische Benachrichtigungen):\n${JSON.stringify(sample)}` }]
+[{"id":"m0","aufgabe":"...","vorschau":"...","details":"...","absender":"email","datum":"datum","prioritaet":"mittel","kategorie":"Kundenanfragen","anzahl":1}]`,
+        messages: [{ role: "user", content: `Analysiere diese Mails. Erfasse ALLES bei dem jemand etwas von der Praxis erwartet oder die Praxis handeln muss:\n${JSON.stringify(sample)}` }]
       })
     });
 
     const data = await res.json();
     const rawText = (data.content?.[0]?.text || "").replace(/```json|```/g, "").trim();
-    
+
     let todos = [];
     const match = rawText.match(/\[[\s\S]*\]/);
     if (match) {
