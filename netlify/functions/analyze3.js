@@ -5,8 +5,7 @@ exports.handler = async (event) => {
     const apiKey = process.env.ANTHROPIC_API_KEY;
 
     const idMap = {};
-    // Max 10 mails to stay within 10s Netlify timeout
-    const sample = mails.slice(0, 10).map((m, i) => {
+    const sample = mails.slice(0, 15).map((m, i) => {
       const shortId = "m" + i;
       idMap[shortId] = m.id;
       return { id: shortId, betreff: m.betreff || "", absender: m.absender || "", datum: m.datum || "", text: (m.text || "").slice(0, 300) };
@@ -16,8 +15,8 @@ exports.handler = async (event) => {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
       body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 6000,
+        model: "claude-sonnet-4-5",
+        max_tokens: 8000,
         system: `Du bist ein Assistent für die Physiotherapiepraxis PhysioPro Lübeck.
 
 REGEL: Wandle JEDE Mail in ein Todo um. Keine Diskussion. Nur 3 Ausnahmen:
