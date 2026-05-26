@@ -227,7 +227,7 @@ async function loadMails() {
       kategorien: m.categories || []
     }));
 
-    const ar = await fetch("/.netlify/functions/analyze-mails", {
+    const ar = await fetch("/.netlify/functions/analyze2", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ mails: simplified })
     });
