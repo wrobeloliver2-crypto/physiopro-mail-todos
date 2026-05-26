@@ -443,7 +443,7 @@ async function loadMails() {
       betreff: m.subject || "(kein Betreff)",
       absender: m.from?.emailAddress?.address || "",
       datum: m.receivedDateTime?.split("T")[0] || "",
-      text: (m.bodyPreview || "").slice(0, 400),
+      text: (m.bodyPreview || "").slice(0, 200),
       kategorien: m.categories || []
     }));
 
@@ -452,7 +452,7 @@ async function loadMails() {
     const analyzeRes = await fetch("/.netlify/functions/analyze-mails", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mails: simplified })
+      body: JSON.stringify({ mails: simplified.slice(0, 20) })
     });
     const analyzeBody = await analyzeRes.json();
     if (!analyzeRes.ok) throw new Error("Analyse-Fehler " + analyzeRes.status + ": " + (analyzeBody.error || ""));
@@ -1086,7 +1086,7 @@ async function loadMails() {
     const analyzeRes = await fetch("/.netlify/functions/analyze-mails", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mails: simplified })
+      body: JSON.stringify({ mails: simplified.slice(0, 20) })
     });
     const analyzeBody = await analyzeRes.json();
     if (!analyzeRes.ok) throw new Error("Analyse-Fehler " + analyzeRes.status + ": " + (analyzeBody.error || ""));
