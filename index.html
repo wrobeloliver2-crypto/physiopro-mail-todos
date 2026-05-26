@@ -357,14 +357,21 @@ function forwardMail(ev, btn) {
   const fwdBody = "\n\n-------- Weitergeleitete Nachricht --------\nVon: " + vonAbsender + "\nBetreff: " + betreff + "\n\n" + vorschau;
   const a = document.createElement("a");
   a.href = "mailto:?subject=" + encodeURIComponent(fwdBetreff) + "&body=" + encodeURIComponent(fwdBody);
+  a.target = "_blank";
+  a.rel = "noopener";
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
 }
 
 function openMail(absender, betreff, text) {
-  const mailto = `mailto:${encodeURIComponent(absender)}?subject=${encodeURIComponent(betreff)}&body=${encodeURIComponent(text)}`;
-  window.location.href = mailto;
+  const a = document.createElement("a");
+  a.href = "mailto:" + encodeURIComponent(absender) + "?subject=" + encodeURIComponent(betreff) + "&body=" + encodeURIComponent(text);
+  a.target = "_blank";
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 function renderTodos() {
