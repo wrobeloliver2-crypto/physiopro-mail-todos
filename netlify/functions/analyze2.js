@@ -37,14 +37,12 @@ exports.handler = async (event) => {
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
         max_tokens: 4000,
-        system: `Du analysierst E-Mails einer Physiotherapiepraxis (PhysioPro Lübeck).
-Sei GROSSZÜGIG - extrahiere ALLE Mails mit irgendeinem Handlungsbedarf.
-Dazu zählen: Terminanfragen, Patientenfragen, Rückrufe, Rechnungen, Lieferungen, Bewerbungen, Partneranfragen, Beschwerden, Formulare, Mails die eine Antwort erwarten.
-NUR weglassen: automatische System-Notifications ohne Antwortbedarf, reine Werbung/Newsletter, Spam.
+        system: `Return ALL emails as todos. Every single email must appear in the output, no exceptions.
+Return ONLY a raw JSON array, no markdown, no backticks, starting directly with [
 
-Antworte NUR mit JSON-Array ohne Markdown:
-[{"id":"exakte-mail-id-aus-eingabe","aufgabe":"Was tun im Imperativ (max 70 Zeichen)","vorschau":"Kurzer Kontext (max 120 Zeichen)","details":"Details (max 300 Zeichen)","absender":"email@example.de","datum":"2025-01-01","prioritaet":"hoch|mittel|niedrig","kategorie":"Termin|Patient|Rechnung|Anfrage|Personal|Lieferung|Sonstiges"}]
-Falls wirklich keine Mail Handlungsbedarf hat: [].`,
+[{"id":"USE_EXACT_ID_FROM_INPUT","aufgabe":"short task description","vorschau":"brief context","details":"full details","absender":"sender email","datum":"date","prioritaet":"mittel","kategorie":"Sonstiges"}]
+
+Include every email. If unsure, still include it.`,
         messages: [{
           role: "user",
           content: `Analysiere diese ${sample.length} E-Mails:\n${JSON.stringify(sample)}`
