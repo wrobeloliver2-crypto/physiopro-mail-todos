@@ -1,48 +1,42 @@
 exports.handler = async (event) => {
-  if (event.httpMethod !== "POST") {
-    return { statusCode: 405, body: "Method Not Allowed" };
-  }
+  if (event.httpMethod !== "POST") return { statusCode: 405, body: "Method Not Allowed" };
   try {
-    const body = JSON.parse(event.body);
-    const mails = body.mails || [];
+    const { mails = [] } = JSON.parse(event.body);
     const apiKey = process.env.ANTHROPIC_API_KEY;
 
-    const sample = mails.slice(0, 3).map(m => ({
-      id: m.id,
-      betreff: m.betreff || "(kein Betreff)",
-      absender: m.absender || "",
-      datum: m.datum || "",
-      text: (m.text || "").slice(0, 100)
-    }));
+    // Map long Outlook IDs to short ones
+    const idMap = {};
+    const sample = mails.slice(0, 20).map((m, i) => {
+      const shortId = "m" + i;
+      idMap[shortId] = m.id;
+      return { id: shortId, betreff: m.betreff || "", absender: m.absender || "", datum: m.datum || "", text: (m.text || "").slice(0, 150) };
+    });
 
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
-        max_tokens: 1000,
-        messages: [{ role: "user", content: `Return these 3 emails as JSON array. Include ALL. No markdown.
-[{"id":"EXACT_ID","aufgabe":"task","vorschau":"preview","details":"details","absender":"email","datum":"date","prioritaet":"mittel","kategorie":"Sonstiges"}]
-Emails: ${JSON.stringify(sample)}` }]
+        max_tokens: 4000,
+        system: `Du analysierst E-Mails einer Physiotherapiepraxis. Extrahiere alle Mails mit Handlungsbedarf.
+Antworte NUR mit reinem JSON-Array (kein Markdown, keine Backticks):
+[{"id":"m0","aufgabe":"Aufgabe","vorschau":"Vorschau","details":"Details","absender":"email","datum":"datum","prioritaet":"mittel","kategorie":"Sonstiges"}]`,
+        messages: [{ role: "user", content: `Analysiere diese Mails und gib alle mit Handlungsbedarf zurück:\n${JSON.stringify(sample)}` }]
       })
     });
 
     const data = await res.json();
-    const rawText = (data.content?.[0]?.text || "").trim();
-    const cleaned = rawText.replace(/```json|```/g, "").trim();
+    const rawText = (data.content?.[0]?.text || "").replace(/```json|```/g, "").trim();
     
     let todos = [];
-    const match = cleaned.match(/\[[\s\S]*\]/);
+    const match = rawText.match(/\[[\s\S]*\]/);
     if (match) {
-      try { todos = JSON.parse(match[0]); } catch(e) {}
+      try {
+        todos = JSON.parse(match[0]).map(t => ({ ...t, id: idMap[t.id] || t.id }));
+      } catch(e) { console.error("Parse error:", e.message); }
     }
 
-    // Return raw text so frontend can show it
-    return {
-      statusCode: 200,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ todos, rawText: rawText.slice(0, 400) })
-    };
+    return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ todos }) };
   } catch(e) {
     return { statusCode: 500, body: JSON.stringify({ error: e.message }) };
   }
