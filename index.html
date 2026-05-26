@@ -111,6 +111,9 @@
 </head>
 <body>
 
+</head>
+<body>
+
 <div id="login-screen">
   <div class="login-card">
     <div class="login-logo">🏥</div>
@@ -166,10 +169,14 @@
   <div class="todo-grid" id="todo-grid"></div>
 </div>
 
+
 <script>
+
 const CLIENT_ID = "a5ace1f0-7fab-4b54-af45-2f22edb72753";
 const TENANT_ID = "84c5926a-a7f0-4d30-bfe6-8d445df9a2ba";
 const SCOPES = ["Mail.Read", "Mail.ReadWrite"];
+const BATCH_SIZE = 8;
+const AUTO_REFRESH_INTERVAL = 5 * 60 * 1000;
 
 const msal = window.msal;
 const pca = new msal.PublicClientApplication({
@@ -181,7 +188,29 @@ const pcaReady = pca.initialize();
 let token = null;
 let allTodos = [];
 let activeFilter = "all";
+let autoRefreshTimer = null;
 
+// ── Cache helpers ──────────────────────────────────────────────
+function saveCache(todos, deltaLink) {
+  sessionStorage.setItem("cachedTodos", JSON.stringify(todos));
+  sessionStorage.setItem("lastLoadTime", Date.now().toString());
+  if (deltaLink) sessionStorage.setItem("deltaLink", deltaLink);
+}
+
+function loadCache() {
+  try {
+    const todos = JSON.parse(sessionStorage.getItem("cachedTodos") || "[]");
+    const lastLoad = parseInt(sessionStorage.getItem("lastLoadTime") || "0");
+    const deltaLink = sessionStorage.getItem("deltaLink") || null;
+    return { todos, lastLoad, deltaLink };
+  } catch(e) { return { todos: [], lastLoad: 0, deltaLink: null }; }
+}
+
+function cacheAge() {
+  return Date.now() - parseInt(sessionStorage.getItem("lastLoadTime") || "0");
+}
+
+// ── Auth ───────────────────────────────────────────────────────
 async function signIn() {
   await pcaReady;
   try {
@@ -193,6 +222,7 @@ async function signIn() {
 
 async function signOut() {
   await pcaReady;
+  sessionStorage.clear();
   pca.logoutPopup();
   document.getElementById("login-screen").style.display = "flex";
   document.getElementById("app").style.display = "none";
@@ -205,46 +235,48 @@ async function getToken() {
   return res.accessToken;
 }
 
+// ── App start ──────────────────────────────────────────────────
 function showApp(account) {
   document.getElementById("login-screen").style.display = "none";
   document.getElementById("app").style.display = "flex";
   document.getElementById("user-email").textContent = account.username;
 
-  // Use cache if less than 5 minutes old
-  const lastLoad = parseInt(sessionStorage.getItem("lastLoadTime") || "0");
-  const cached = sessionStorage.getItem("cachedTodos");
-  if (cached && Date.now() - lastLoad < AUTO_REFRESH_INTERVAL) {
-    allTodos = JSON.parse(cached);
+  const { todos, lastLoad, deltaLink } = loadCache();
+  if (todos.length > 0 && cacheAge() < AUTO_REFRESH_INTERVAL) {
+    // Cache fresh: show immediately, no API call
+    allTodos = todos;
     renderTodos(); updateStats();
     document.getElementById("filter-bar").style.display = "flex";
     const t = new Date(lastLoad).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
-    document.getElementById("last-updated").textContent = "Zuletzt: " + t + " · auto ↺ 5 min";
+    setLastUpdated(t, false);
     startAutoRefresh();
   } else {
-    loadMails();
+    // Cache stale or empty: full load
+    loadMails(false);
   }
 }
 
-let autoRefreshTimer = null;
-const AUTO_REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
+// Refresh on tab focus only if cache expired
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && autoRefreshTimer) {
+    if (cacheAge() > AUTO_REFRESH_INTERVAL) loadMails(true);
+  }
+});
 
 function startAutoRefresh() {
   if (autoRefreshTimer) clearInterval(autoRefreshTimer);
   autoRefreshTimer = setInterval(() => {
-    if (!document.hidden) loadMails(); // only refresh if tab is visible
+    if (!document.hidden) loadMails(true); // delta sync
   }, AUTO_REFRESH_INTERVAL);
 }
 
-// Refresh when tab becomes visible only if cache is older than 5 minutes
-document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) {
-    const lastLoad = parseInt(sessionStorage.getItem("lastLoadTime") || "0");
-    if (Date.now() - lastLoad > AUTO_REFRESH_INTERVAL) loadMails();
-    else if (allTodos.length > 0) { renderTodos(); updateStats(); }
-  }
-});
+function setLastUpdated(time, isDelta) {
+  const label = isDelta ? "Delta-Sync" : "Vollsync";
+  document.getElementById("last-updated").textContent = "Zuletzt: " + time + " (" + label + ") · auto ↺ 5 min";
+}
 
-async function loadMails() {
+// ── Main load: full OR delta ───────────────────────────────────
+async function loadMails(deltaOnly = false) {
   const btn = document.getElementById("refresh-btn");
   const loading = document.getElementById("loading-state");
   const loadingText = document.getElementById("loading-text");
@@ -254,130 +286,152 @@ async function loadMails() {
   const days = parseInt(document.getElementById("period-sel").value) || 14;
 
   btn.disabled = true;
-  loading.classList.add("visible");
-  grid.innerHTML = "";
-  filterBar.style.display = "none";
   errorBanner.classList.remove("visible");
+
+  // If delta: keep showing existing todos while loading
+  if (!deltaOnly) {
+    loading.classList.add("visible");
+    grid.innerHTML = "";
+    filterBar.style.display = "none";
+  } else {
+    loadingText.textContent = "Delta-Sync…";
+    loading.classList.add("visible");
+  }
 
   try {
     loadingText.textContent = "Authentifizierung…";
     token = await getToken();
 
-    loadingText.textContent = `Lade E-Mails (letzte ${days} Tage)…`;
-    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    const { todos: cachedTodos, deltaLink } = loadCache();
 
-    const r = await fetch(
-      `https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$top=100&$select=id,subject,from,receivedDateTime,bodyPreview,categories,webLink&$orderby=receivedDateTime desc`,
-      { headers: { Authorization: "Bearer " + token } }
-    );
-    if (!r.ok) throw new Error("Graph: " + r.status);
-    const data = await r.json();
-    // Filter by date client-side ($filter + $orderby together requires special Graph index and often fails silently)
-    const sinceDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-    const mails = (data.value || []).filter(m => new Date(m.receivedDateTime) >= sinceDate);
+    let newMails = [];
+    let nextDeltaLink = null;
 
-    if (!mails.length) {
-      loading.classList.remove("visible");
-      filterBar.style.display = "flex";
-      grid.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-title">Keine E-Mails im gewählten Zeitraum</div></div>';
-      return;
-    }
+    if (deltaOnly && deltaLink) {
+      // ── DELTA: only fetch changed mails since last sync ──
+      loadingText.textContent = "Prüfe neue Mails (Delta)…";
+      const r = await fetch(deltaLink, { headers: { Authorization: "Bearer " + token } });
+      if (!r.ok) throw new Error("Delta: " + r.status);
+      const data = await r.json();
+      newMails = (data.value || []).filter(m => m.parentFolderId !== undefined || m["@removed"] === undefined);
+      nextDeltaLink = data["@odata.deltaLink"] || deltaLink;
 
-    // Prepare all mails
-    const simplified = mails.map(m => ({
-      id: m.id,
-      betreff: m.subject || "(kein Betreff)",
-      absender: m.from?.emailAddress?.address || "",
-      absender_name: m.from?.emailAddress?.name || "",
-      datum: (m.receivedDateTime || "").slice(0, 10),
-      text: (m.bodyPreview || "").slice(0, 300),
-      kategorien: m.categories || [],
-      webLink: m.webLink || ""
-    }));
+      // Remove deleted/archived mails from cache
+      const removedIds = new Set((data.value || [])
+        .filter(m => m["@removed"] || m.parentFolderId)
+        .map(m => m.id));
 
-    // Fetch sent items to detect already-replied mails
-    loadingText.textContent = "Prüfe gesendete Antworten…";
-    let repliedSubjects = new Set();
-    try {
-      const sentR = await fetch(
-        "https://graph.microsoft.com/v1.0/me/mailFolders/sentitems/messages?$top=100&$select=subject,sentDateTime&$orderby=sentDateTime desc",
+      if (removedIds.size > 0) {
+        allTodos = cachedTodos.filter(t => !removedIds.has(t.id));
+      } else {
+        allTodos = [...cachedTodos];
+      }
+
+    } else {
+      // ── FULL LOAD: fetch all mails in period ──
+      loadingText.textContent = `Lade E-Mails (letzte ${days} Tage)…`;
+      const sinceDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+      // First call gets delta link for future syncs
+      const r = await fetch(
+        "https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages/delta?$select=id,subject,from,receivedDateTime,bodyPreview,categories,webLink&$orderby=receivedDateTime desc",
         { headers: { Authorization: "Bearer " + token } }
       );
-      if (sentR.ok) {
-        const sentData = await sentR.json();
-        (sentData.value || []).forEach(m => {
-          const s = (m.subject || "").replace(/^(Re:|AW:|Fwd:|WG:)\s*/i, "").trim().toLowerCase();
-          repliedSubjects.add(s);
+      if (!r.ok) throw new Error("Graph: " + r.status);
+      const data = await r.json();
+      nextDeltaLink = data["@odata.deltaLink"] || null;
+      newMails = (data.value || []).filter(m => new Date(m.receivedDateTime) >= sinceDate);
+      allTodos = []; // full reset
+    }
+
+    // ── Analyse nur neue Mails ──────────────────────────────
+    if (newMails.length > 0) {
+      // Fetch sent items for reply detection
+      loadingText.textContent = "Prüfe gesendete Antworten…";
+      let repliedSubjects = new Set();
+      try {
+        const sentR = await fetch(
+          "https://graph.microsoft.com/v1.0/me/mailFolders/sentitems/messages?$top=100&$select=subject",
+          { headers: { Authorization: "Bearer " + token } }
+        );
+        if (sentR.ok) {
+          const sentData = await sentR.json();
+          (sentData.value || []).forEach(m => {
+            const s = (m.subject || "").replace(/^(Re:|AW:|Fwd:|WG:)\s*/i, "").trim().toLowerCase();
+            repliedSubjects.add(s);
+          });
+        }
+      } catch(e) { console.warn("Sent-Ordner:", e.message); }
+
+      // Batch analyse
+      const simplified = newMails.map(m => ({
+        id: m.id,
+        betreff: m.subject || "(kein Betreff)",
+        absender: m.from?.emailAddress?.address || "",
+        absender_name: m.from?.emailAddress?.name || "",
+        datum: (m.receivedDateTime || "").slice(0, 10),
+        text: (m.bodyPreview || "").slice(0, 300),
+        kategorien: m.categories || [],
+        webLink: m.webLink || ""
+      }));
+
+      const batches = [];
+      for (let i = 0; i < simplified.length; i += BATCH_SIZE) batches.push(simplified.slice(i, i + BATCH_SIZE));
+
+      for (let b = 0; b < batches.length; b++) {
+        loadingText.textContent = `KI analysiert Batch ${b+1}/${batches.length} (${batches[b].length} Mails)…`;
+        const ar = await fetch("/.netlify/functions/analyze3", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mails: batches[b] })
         });
-      }
-    } catch(e) { console.warn("Sent-Ordner nicht abrufbar:", e.message); }
+        const arText = await ar.text();
+        let ab;
+        try { ab = JSON.parse(arText); } catch(e) { console.warn("Batch " + (b+1) + " skip:", arText.slice(0,80)); continue; }
+        if (!ar.ok) { console.warn("Batch " + (b+1) + " HTTP", ar.status); continue; }
 
-    // Process in batches of 10 – each batch is one API call to stay within timeout
-    const BATCH_SIZE = 8;
-    const batches = [];
-    for (let i = 0; i < simplified.length; i += BATCH_SIZE) {
-      batches.push(simplified.slice(i, i + BATCH_SIZE));
+        const batchTodos = (ab.todos || []).map(t => {
+          const mail = newMails.find(m => m.id === t.id);
+          const cats = mail?.categories || [];
+          if (cats.some(c => c.includes("Erledigt"))) return null;
+          let status = "todo";
+          if (cats.some(c => c.includes("Arbeit"))) status = "progress";
+          const subjectClean = (mail?.subject || "").replace(/^(Re:|AW:|Fwd:|WG:)\s*/i, "").trim().toLowerCase();
+          return { ...t, status, anzahl: t.anzahl || 1,
+            original_betreff: mail?.subject || t.aufgabe,
+            webLink: mail?.webLink || "",
+            alreadyReplied: repliedSubjects.has(subjectClean) };
+        }).filter(Boolean);
+
+        // Merge: remove existing todos with same id, add new ones
+        const newIds = new Set(batchTodos.map(t => t.id));
+        allTodos = allTodos.filter(t => !newIds.has(t.id));
+        allTodos = [...allTodos, ...batchTodos];
+
+        renderTodos(); updateStats();
+      }
+    } else if (deltaOnly) {
+      loadingText.textContent = "Keine neuen Mails.";
     }
 
-    allTodos = [];
-    for (let b = 0; b < batches.length; b++) {
-      loadingText.textContent = `KI analysiert Batch ${b + 1} von ${batches.length} (${batches[b].length} Mails)…`;
-
-      const ar = await fetch("/.netlify/functions/analyze3", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mails: batches[b] })
-      });
-      const arText = await ar.text();
-      let ab;
-      try { ab = JSON.parse(arText); } catch(e) {
-        console.warn("Batch " + (b+1) + " übersprungen (Parse-Fehler):", arText.slice(0,100));
-        continue; // Skip this batch, keep going
-      }
-      if (!ar.ok) {
-        console.warn("Batch " + (b+1) + " übersprungen (HTTP " + ar.status + ")");
-        continue; // Skip this batch, keep going
-      }
-
-      const batchTodos = (ab.todos || []).map(t => {
-        const mail = mails.find(m => m.id === t.id);
-        const cats = mail?.categories || [];
-        let status = "todo";
-        if (cats.some(c => c.includes("Arbeit"))) status = "progress";
-        if (cats.some(c => c.includes("Erledigt"))) return null;
-        const subjectClean = (mail?.subject || "").replace(/^(Re:|AW:|Fwd:|WG:)\s*/i, "").trim().toLowerCase();
-        const alreadyReplied = repliedSubjects.has(subjectClean);
-        return { ...t, status, anzahl: t.anzahl || 1, original_betreff: mail?.subject || t.aufgabe, webLink: mail?.webLink || "", alreadyReplied };
-      }).filter(Boolean);
-
-      allTodos = [...allTodos, ...batchTodos];
-
-      // Show results progressively after each batch
-      renderTodos();
-      updateStats();
-    }
+    // Save updated cache + delta link
+    saveCache(allTodos, nextDeltaLink);
 
     loading.classList.remove("visible");
     filterBar.style.display = "flex";
-
-    // Cache todos and timestamp
-    sessionStorage.setItem("cachedTodos", JSON.stringify(allTodos));
-    sessionStorage.setItem("lastLoadTime", Date.now().toString());
-
-    // Update last-updated timestamp and start auto-refresh
     const now = new Date().toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
-    document.getElementById("last-updated").textContent = "Zuletzt: " + now + " · auto ↺ 5 min";
+    setLastUpdated(now, deltaOnly);
     startAutoRefresh();
 
   } catch(e) {
     loading.classList.remove("visible");
+    if (allTodos.length > 0) { renderTodos(); updateStats(); filterBar.style.display = "flex"; }
     errorBanner.textContent = "⚠️ " + e.message;
     errorBanner.classList.add("visible");
+    console.error(e);
   } finally {
     btn.disabled = false;
   }
 }
-
-const PCOLS = { hoch: "#e74c3c", mittel: "#f39c12", niedrig: "#55725e" };
 
 function openOriginal(ev, btn) {
   ev.stopPropagation();
@@ -597,6 +651,7 @@ function esc(s) { return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;"
   const accounts = pca.getAllAccounts();
   if (accounts.length > 0) { pca.setActiveAccount(accounts[0]); showApp(accounts[0]); }
 })();
+
 </script>
 </body>
 </html>
