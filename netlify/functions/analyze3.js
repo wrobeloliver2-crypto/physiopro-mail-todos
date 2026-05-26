@@ -16,7 +16,7 @@ exports.handler = async (event) => {
       headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
-        max_tokens: 4000,
+        max_tokens: 6000,
         system: `Du analysierst E-Mails einer Physiotherapiepraxis (PhysioPro Lübeck) und erstellst handlungsorientierte Todos.
 
 Im Zweifel IMMER als Todo erfassen – lieber zu viel als zu wenig.
@@ -39,12 +39,19 @@ IGNORIERE NUR diese Typen (wirklich kein Handlungsbedarf):
 - Automatische GetMyInvoices-Benachrichtigungen (Absender/Betreff enthält "getmyinvoices")
 - Reine Zahlungsbestätigungen / Buchungsbestätigungen ohne Folgeaktion
 - Newsletter und Marketing-Mails
-- Automatische System-Status-Meldungen ohne Handlungsbedarf (z.B. "Backup erfolgreich")
+- Automatische System-Status-Meldungen ohne Handlungsbedarf
 
-DEDUPLIZIERUNG: Mehrere Mails zum selben Thema (z.B. 3 Probetraining-Anfragen) → eine Karte, ID der neuesten Mail, Feld "anzahl" = Anzahl.
+DEDUPLIZIERUNG: Mehrere Mails zum selben Thema → eine Karte, ID der neuesten Mail, Feld "anzahl" = Anzahl.
+
+ANTWORT-VORSCHLAG: Wenn das Todo eine Antwort per E-Mail erfordert (Terminbestätigung, Dokumentenanfrage, Rückfrage beantworten, Bewerbung bestätigen etc.), erstelle einen fertigen deutschen E-Mail-Entwurf.
+- Anrede mit Namen wenn bekannt, sonst "Guten Tag,"
+- Professionell aber freundlich, kurz und klar
+- Passend zum Kontext (Physiotherapiepraxis)
+- Unterschrift: "Mit freundlichen Grüßen\nIhr PhysioPro Lübeck Team"
+- Wenn KEIN Antwort-Mail nötig (z.B. interne Aufgabe, Zahlung prüfen): "antwort_betreff" und "antwort_text" weglassen oder null setzen
 
 Für jedes Todo:
-- "aufgabe": Konkrete Handlungsanweisung mit Namen/Details wenn bekannt (z.B. "Teilnahmebestätigung für Krankenkasse an [Name] ausstellen und senden")
+- "aufgabe": Konkrete Handlungsanweisung mit Namen/Details wenn bekannt
 - "vorschau": 1 Satz was die Person braucht oder was passiert ist
 - "details": Handlungsplan – was genau tun, wen kontaktieren, welche Unterlagen, Zeitrahmen
 - "absender": E-Mail-Adresse des Absenders
@@ -52,10 +59,12 @@ Für jedes Todo:
 - "prioritaet": "hoch" (Zahlung/dringend/Frist), "mittel" (Kundenanfrage/Dokument), "niedrig" (Info/kein Zeitdruck)
 - "kategorie": Finanzen | Mitgliedschaften | Kundenanfragen | Dokumentenanfragen | Personalwesen | Kundenfollow-up | Behörden | Sonstiges
 - "anzahl": Anzahl zusammengefasster Mails
+- "antwort_betreff": Betreff für Antwort-Mail (z.B. "Re: Teilnahmebestätigung") oder null
+- "antwort_text": Fertiger E-Mail-Text auf Deutsch oder null
 
 Antworte NUR mit reinem JSON-Array (kein Markdown, keine Backticks):
-[{"id":"m0","aufgabe":"...","vorschau":"...","details":"...","absender":"email","datum":"datum","prioritaet":"mittel","kategorie":"Kundenanfragen","anzahl":1}]`,
-        messages: [{ role: "user", content: `Analysiere diese Mails. Erfasse ALLES bei dem jemand etwas von der Praxis erwartet oder die Praxis handeln muss:\n${JSON.stringify(sample)}` }]
+[{"id":"m0","aufgabe":"...","vorschau":"...","details":"...","absender":"email","datum":"datum","prioritaet":"mittel","kategorie":"Kundenanfragen","anzahl":1,"antwort_betreff":"Re: ...","antwort_text":"Guten Tag Frau Mustermann,\\n\\nvielen Dank für Ihre Anfrage...\\n\\nMit freundlichen Grüßen\\nIhr PhysioPro Lübeck Team"}]`,
+        messages: [{ role: "user", content: `Analysiere diese Mails. Erfasse ALLES bei dem jemand etwas von der Praxis erwartet oder die Praxis handeln muss. Erstelle Antwort-Entwürfe wo eine Mail-Antwort sinnvoll ist:\n${JSON.stringify(sample)}` }]
       })
     });
 
