@@ -328,9 +328,10 @@ async function loadMails(deltaOnly = false) {
 
     // ── 1. Lade bestehende Todos aus Google Sheet ──────────────
     loadingText.textContent = "Lade Todos aus Datenbank…";
+    const currentUserEmail = pca.getActiveAccount()?.username || "";
     let sheetTodos = [];
     try {
-      const sr = await fetch("/.netlify/functions/todos-api");
+      const sr = await fetch("/.netlify/functions/todos-api?user=" + encodeURIComponent(currentUserEmail));
       if (sr.ok) {
         const sd = await sr.json();
         sheetTodos = sd.todos || [];
@@ -355,24 +356,23 @@ async function loadMails(deltaOnly = false) {
       loadingText.textContent = "Prüfe neue Mails (Delta)…";
       const r = await fetch(deltaLink, { headers: { Authorization: "Bearer " + token } });
       if (!r.ok) {
-        // Delta link expired or invalid – fall back to full load
         console.warn("Delta fehlgeschlagen (" + r.status + "), starte Vollsync");
         sessionStorage.removeItem("deltaLink");
         return loadMails(false);
       }
       const data = await r.json();
-      newMails = (data.value || []).filter(m => m.parentFolderId !== undefined || m["@removed"] === undefined);
+      newMails = (data.value || []).filter(m => !m["@removed"]);
       nextDeltaLink = data["@odata.deltaLink"] || deltaLink;
 
-      // Remove deleted/archived mails from cache
+      // Remove deleted/archived mails from sheet todos
       const removedIds = new Set((data.value || [])
-        .filter(m => m["@removed"] || m.parentFolderId)
+        .filter(m => m["@removed"])
         .map(m => m.id));
 
       if (removedIds.size > 0) {
-        allTodos = cachedTodos.filter(t => !removedIds.has(t.id));
+        allTodos = sheetTodos.filter(t => !removedIds.has(t.mailId));
       } else {
-        allTodos = [...cachedTodos];
+        allTodos = [...sheetTodos];
       }
 
     } else {
@@ -473,12 +473,14 @@ async function loadMails(deltaOnly = false) {
 
         // Save new todos to Google Sheet
         if (batchTodos.length > 0) {
+          const currentUser = pca.getActiveAccount()?.username || "";
           fetch("/.netlify/functions/todos-api", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               action: "bulk_upsert",
-              todos: batchTodos.map(t => ({ ...t, mailId: t.id }))
+              userEmail: currentUser,
+              todos: batchTodos.map(t => ({ ...t, mailId: t.id, userEmail: currentUser }))
             })
           }).then(r => r.json()).then(d => {
             if (d.ok) console.log("Sheet gespeichert:", d.count, "Todos");
