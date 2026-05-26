@@ -1,9 +1,5 @@
-[build]
+-e [build]
   publish = "."
   functions = "netlify/functions"
 
-[[headers]]
-  for = "/*"
-  [headers.values]
-    X-Frame-Options = "DENY"
-    X-Content-Type-Options = "nosniff"
+# Tue May 26 05:16:38 UTC 2026
