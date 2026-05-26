@@ -8,43 +8,54 @@ exports.handler = async (event) => {
     const sample = mails.slice(0, 20).map((m, i) => {
       const shortId = "m" + i;
       idMap[shortId] = m.id;
-      return { id: shortId, betreff: m.betreff || "", absender: m.absender || "", datum: m.datum || "", text: (m.text || "").slice(0, 200) };
+      return { id: shortId, betreff: m.betreff || "", absender: m.absender || "", datum: m.datum || "", text: (m.text || "").slice(0, 300) };
     });
 
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
       body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 6000,
-        system: `Du analysierst E-Mails einer Physiotherapiepraxis (PhysioPro Lübeck).
+        model: "claude-sonnet-4-5",
+        max_tokens: 8000,
+        system: `Du bist ein Assistent für die Physiotherapiepraxis PhysioPro Lübeck und verarbeitest eingehende E-Mails.
 
-GRUNDREGEL: Jede Mail ist ein Todo – es sei denn, sie fällt eindeutig in eine der folgenden Ausnahmen.
+AUFGABE: Wandle JEDE E-Mail in ein Todo um. Keine Ausnahmen außer den drei unten genannten.
 
-IGNORIERE NUR:
-- Newsletter und reine Werbe-/Marketing-Mails ohne konkreten Bezug zur Praxis
-- Automatische Benachrichtigungen von GetMyInvoices (Absender/Betreff enthält "getmyinvoices")
-- Automatische System-Statusmeldungen ohne Handlungsbedarf (z.B. "Backup erfolgreich", "Server OK")
+EINZIGE AUSNAHMEN – nur diese drei Typen ignorieren:
+1. Newsletter / Werbe-Mails (kein persönlicher Bezug zur Praxis, Massenversand)
+2. GetMyInvoices-Automaten (Absender oder Betreff enthält "getmyinvoices")  
+3. Reine technische Systemstatus-Mails ohne Handlung (z.B. "Backup OK", "Server läuft")
 
-ALLES ANDERE wird als Todo erfasst – auch wenn der Handlungsbedarf unklar erscheint. Im Zweifel immer erfassen.
+ALLES ANDERE ist ein Todo – auch wenn du glaubst es sei unwichtig. Beispiele die IMMER erfasst werden:
+- Präventionsbescheinigungen, Krankenkassen-Nachweise, Teilnahmebestätigungen
+- Terminanfragen, Absagen, Umbuchungen
+- Bewerbungen
+- Zahlungsprobleme, Mahnungen, Rücklastschriften
+- Kundenanfragen jeder Art
+- Lieferanten, Dienstleister, Behörden
+- Interne Weiterleitungen
+- Alles wo jemand eine Antwort oder Aktion erwartet
 
-DEDUPLIZIERUNG: Mehrere Mails zum exakt gleichen Thema vom gleichen Absender → eine Karte, ID der neuesten Mail, "anzahl" = Anzahl.
+DEDUPLIZIERUNG: Exakt gleiche Mails vom gleichen Absender → eine Karte, neueste ID, "anzahl" = Anzahl.
 
-Für jedes Todo:
-- "aufgabe": Konkrete Handlungsanweisung, mit Name/Details wenn erkennbar
-- "vorschau": 1 Satz was die Person schreibt oder was passiert ist
-- "details": Was genau tun? Wen kontaktieren? Welche Unterlagen/Referenz? Zeitrahmen?
+ANTWORT-MAIL: Erstelle IMMER einen Antwort-Entwurf wenn die Mail eine Reaktion der Praxis erwartet (Anfragen, Dokumente, Terminwünsche, Bewerbungen etc.). Nur bei reinen internen Aufgaben ohne Außenkommunikation (z.B. Zahlung intern prüfen) kannst du null setzen.
+
+Felder pro Todo:
+- "id": Mail-ID
+- "aufgabe": Präzise Handlungsanweisung mit Namen/Details
+- "vorschau": 1 Satz was passiert ist / was gebraucht wird  
+- "details": Konkreter Handlungsplan (was tun, wen kontaktieren, Referenz, Zeitrahmen)
 - "absender": E-Mail-Adresse
-- "datum": Datum der (neuesten) Mail
-- "prioritaet": "hoch" (Zahlung/Frist/dringend), "mittel" (Anfrage/Antwort erwartet), "niedrig" (Info/kein Zeitdruck)
+- "datum": Datum der neuesten Mail
+- "prioritaet": "hoch" | "mittel" | "niedrig"
 - "kategorie": Finanzen | Mitgliedschaften | Kundenanfragen | Dokumentenanfragen | Personalwesen | Kundenfollow-up | Behörden | Sonstiges
-- "anzahl": Anzahl zusammengefasster Mails
-- "antwort_betreff": Betreff für Antwort-Mail wenn eine Antwort sinnvoll ist, sonst null
-- "antwort_text": Fertiger deutscher E-Mail-Entwurf wenn eine Antwort sinnvoll ist, sonst null. Anrede mit Namen wenn bekannt, Unterschrift "Mit freundlichen Grüßen\\nIhr PhysioPro Lübeck Team"
+- "anzahl": Zahl
+- "antwort_betreff": Betreff der Antwort-Mail oder null
+- "antwort_text": Fertiger deutscher E-Mail-Text, professionell und freundlich. Anrede mit Namen wenn bekannt. Unterschrift: "Mit freundlichen Grüßen\nIhr PhysioPro Lübeck Team" – oder null nur bei rein internen Aufgaben
 
-Antworte NUR mit reinem JSON-Array (kein Markdown, keine Backticks):
-[{"id":"m0","aufgabe":"...","vorschau":"...","details":"...","absender":"email","datum":"datum","prioritaet":"mittel","kategorie":"Sonstiges","anzahl":1,"antwort_betreff":null,"antwort_text":null}]`,
-        messages: [{ role: "user", content: `Hier sind die E-Mails. Erfasse ALLE als Todo außer Newsletter, GetMyInvoices-Mails und automatische Systemmeldungen:\n${JSON.stringify(sample)}` }]
+Antworte AUSSCHLIESSLICH mit einem JSON-Array, kein Markdown, keine Erklärungen:
+[{"id":"m0","aufgabe":"...","vorschau":"...","details":"...","absender":"...","datum":"...","prioritaet":"mittel","kategorie":"Sonstiges","anzahl":1,"antwort_betreff":"...","antwort_text":"..."}]`,
+        messages: [{ role: "user", content: `Verarbeite diese ${sample.length} E-Mails. JEDE wird ein Todo außer Newsletter, GetMyInvoices und technische Systemmeldungen:\n\n${JSON.stringify(sample)}` }]
       })
     });
 
