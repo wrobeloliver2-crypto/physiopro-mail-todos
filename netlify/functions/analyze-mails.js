@@ -10,13 +10,12 @@ exports.handler = async (event) => {
     }
 
     const apiKey = process.env.ANTHROPIC_API_KEY;
-    const sample = mails.slice(0, 10).map(m => ({
-      id: m.id,
-      betreff: m.betreff || "(kein Betreff)",
-      absender: m.absender || "",
-      datum: m.datum || "",
-      text: (m.text || "").slice(0, 200)
-    }));
+    // Use short index as id to avoid JSON issues with long IDs
+    const idMap = {};
+    const sample = mails.slice(0, 10).map((m, i) => {
+      idMap["mail" + i] = m.id;
+      return { id: "mail" + i, betreff: m.betreff || "(kein Betreff)", absender: m.absender || "", datum: m.datum || "", text: (m.text || "").slice(0, 150) };
+    });
 
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -24,11 +23,9 @@ exports.handler = async (event) => {
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
         max_tokens: 4000,
-        messages: [{ role: "user", content: `Gib ALLE diese E-Mails als JSON-Array zurück. Keine Ausnahmen. Alle ${sample.length} Mails müssen im Output erscheinen.
-
-Format (NUR JSON, kein Markdown):
-[{"id":"EXAKTE-ID","aufgabe":"Betreff der Mail","vorschau":"Von wem","details":"Mailinhalt","absender":"email","datum":"datum","prioritaet":"mittel","kategorie":"Sonstiges"}]
-
+        messages: [{ role: "user", content: `Gib ALLE ${sample.length} E-Mails als JSON-Array zurück. Jede Mail muss erscheinen.
+NUR JSON, kein Markdown:
+[{"id":"mail0","aufgabe":"Betreff","vorschau":"Absender","details":"Text","absender":"email","datum":"datum","prioritaet":"mittel","kategorie":"Sonstiges"}]
 Mails: ${JSON.stringify(sample)}` }]
       })
     });
@@ -37,7 +34,7 @@ Mails: ${JSON.stringify(sample)}` }]
     const text = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || "[]";
     let todos = [];
     const match = text.replace(/\`\`\`json|\`\`\`/g, "").trim().match(/\[[\s\S]*\]/);
-    if (match) { try { todos = JSON.parse(match[0]); } catch(e) {} }
+    if (match) { try { todos = JSON.parse(match[0]).map(t => ({ ...t, id: idMap[t.id] || t.id })); } catch(e) { console.error(e); } }
 
     return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ todos }) };
   } catch(e) {
