@@ -388,7 +388,11 @@ function forwardMail(ev, btn) {
   document.body.removeChild(a);
 }
 
-function openMail(absender, betreff, text) {
+function openMail(ev, btn) {
+  ev.stopPropagation();
+  const absender = btn.dataset.absender;
+  const betreff = btn.dataset.betreff;
+  const text = btn.dataset.text;
   const a = document.createElement("a");
   a.href = "mailto:" + encodeURIComponent(absender) + "?subject=" + encodeURIComponent(betreff) + "&body=" + encodeURIComponent(text);
   a.target = "_blank";
@@ -424,7 +428,7 @@ function renderTodos() {
       <div class="reply-block">
         <div class="reply-block-title">✉️ Antwort-Vorschlag der KI</div>
         <div class="reply-preview">${esc(t.antwort_text)}</div>
-        <button class="btn-open-mail" onclick="openMail('${esc(t.absender)}','${esc(t.antwort_betreff)}',${JSON.stringify(t.antwort_text)})">
+        <button class="btn-open-mail" data-absender="${esc(t.absender)}" data-betreff="${esc(t.antwort_betreff)}" data-text="${esc(t.antwort_text)}" onclick="openMail(event,this)">
           📨 Mail-Programm öffnen mit diesem Entwurf
         </button>
       </div>` : "";
