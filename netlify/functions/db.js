@@ -1,112 +1,159 @@
-// db.js – Google Sheets als Datenbank für PhysioPro Mail Todos
-// Tabs: todos | notizen | erinnerungen
+// db.js – Google Sheets DB ohne externe Dependencies (gleiche Methode wie Fahrtenbuch)
+const https = require('https');
+const crypto = require('crypto');
 
-const { google } = require("googleapis");
+const SHEET_ID     = process.env.TODOS_SHEET_ID || '1ekFnHUnj5WTGQ8yxQo_qbOJn1N5qk6x78Q28WcM1xaU';
+const CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL || 'physiopro-zeiterfassung@drop-in-ticket-umwandeln.iam.gserviceaccount.com';
+const PRIVATE_KEY  = (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
+const SHEET_TAB    = 'todos';
 
-const SHEET_ID = process.env.TODOS_SHEET_ID;
+const HEADERS = ['mailId','aufgabe','vorschau','details','absender','datum','prioritaet',
+  'kategorie','anzahl','status','original_betreff','webLink','alreadyReplied',
+  'antwort_betreff','antwort_text','notiz','erinnerung','createdAt'];
 
-async function getAuth() {
-  const auth = new google.auth.GoogleAuth({
-    credentials: {
-      client_email: process.env.GOOGLE_CLIENT_EMAIL,
-      private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n"),
-    },
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+// ── JWT & Token ────────────────────────────────────────────────
+function createJWT() {
+  const now = Math.floor(Date.now()/1000);
+  const header  = Buffer.from(JSON.stringify({alg:'RS256',typ:'JWT'})).toString('base64url');
+  const payload = Buffer.from(JSON.stringify({
+    iss: CLIENT_EMAIL,
+    scope: 'https://www.googleapis.com/auth/spreadsheets',
+    aud: 'https://oauth2.googleapis.com/token',
+    exp: now+3600, iat: now
+  })).toString('base64url');
+  const sign = crypto.createSign('RSA-SHA256');
+  sign.update(`${header}.${payload}`);
+  return `${header}.${payload}.${sign.sign(PRIVATE_KEY,'base64url')}`;
+}
+
+function getToken() {
+  return new Promise((resolve,reject) => {
+    const body = `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${createJWT()}`;
+    const req = https.request({
+      hostname:'oauth2.googleapis.com', path:'/token', method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded','Content-Length':body.length}
+    }, res => {
+      let d=''; res.on('data',c=>d+=c);
+      res.on('end',()=>{ try{resolve(JSON.parse(d).access_token);}catch(e){reject(new Error('Token: '+d));} });
+    });
+    req.on('error',reject); req.write(body); req.end();
   });
-  return auth.getClient();
 }
 
-async function getSheets() {
-  const auth = await getAuth();
-  return google.sheets({ version: "v4", auth });
+// ── HTTP helpers ───────────────────────────────────────────────
+function sheetsGet(token, path) {
+  return new Promise((resolve,reject) => {
+    https.get({hostname:'sheets.googleapis.com', path, headers:{Authorization:`Bearer ${token}`}}, res => {
+      let d=''; res.on('data',c=>d+=c);
+      res.on('end',()=>{ try{resolve(JSON.parse(d));}catch(e){reject(new Error(d));} });
+    }).on('error',reject);
+  });
 }
 
-// ── TODOS ──────────────────────────────────────────────────────
-async function getTodos() {
-  const sheets = await getSheets();
-  const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: "todos!A2:Z" });
-  const rows = r.data.values || [];
-  return rows.map(row => ({
-    mailId:           row[0] || "",
-    aufgabe:          row[1] || "",
-    vorschau:         row[2] || "",
-    details:          row[3] || "",
-    absender:         row[4] || "",
-    datum:            row[5] || "",
-    prioritaet:       row[6] || "mittel",
-    kategorie:        row[7] || "Sonstiges",
-    anzahl:           parseInt(row[8]) || 1,
-    status:           row[9] || "todo",
-    original_betreff: row[10] || "",
-    webLink:          row[11] || "",
-    alreadyReplied:   row[12] === "true",
-    antwort_betreff:  row[13] || "",
-    antwort_text:     row[14] || "",
-    notiz:            row[15] || "",
-    erinnerung:       row[16] || "",
-    createdAt:        row[17] || new Date().toISOString(),
-  }));
-}
-
-async function upsertTodo(todo) {
-  const sheets = await getSheets();
-  // Check if mailId exists
-  const existing = await getTodos();
-  const idx = existing.findIndex(t => t.mailId === todo.mailId);
-  const row = [
-    todo.mailId, todo.aufgabe, todo.vorschau, todo.details,
-    todo.absender, todo.datum, todo.prioritaet, todo.kategorie,
-    todo.anzahl || 1, todo.status || "todo", todo.original_betreff || "",
-    todo.webLink || "", todo.alreadyReplied ? "true" : "false",
-    todo.antwort_betreff || "", todo.antwort_text || "",
-    todo.notiz || "", todo.erinnerung || "",
-    todo.createdAt || new Date().toISOString()
-  ];
-  if (idx >= 0) {
-    // Update existing row (row index = idx + 2 because of header)
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SHEET_ID,
-      range: `todos!A${idx + 2}`,
-      valueInputOption: "RAW",
-      requestBody: { values: [row] }
+function sheetsPost(token, path, body) {
+  return new Promise((resolve,reject) => {
+    const b = JSON.stringify(body);
+    const req = https.request({
+      hostname:'sheets.googleapis.com', path, method:'POST',
+      headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json','Content-Length':Buffer.byteLength(b)}
+    }, res => {
+      let d=''; res.on('data',c=>d+=c);
+      res.on('end',()=>{ try{resolve(JSON.parse(d));}catch(e){reject(new Error(d));} });
     });
-  } else {
-    // Append new row
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: SHEET_ID,
-      range: "todos!A:A",
-      valueInputOption: "RAW",
-      requestBody: { values: [row] }
+    req.on('error',reject); req.write(b); req.end();
+  });
+}
+
+function sheetsPut(token, path, body) {
+  return new Promise((resolve,reject) => {
+    const b = JSON.stringify(body);
+    const req = https.request({
+      hostname:'sheets.googleapis.com', path, method:'PUT',
+      headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json','Content-Length':Buffer.byteLength(b)}
+    }, res => {
+      let d=''; res.on('data',c=>d+=c);
+      res.on('end',()=>{ try{resolve(JSON.parse(d));}catch(e){reject(new Error(d));} });
     });
+    req.on('error',reject); req.write(b); req.end();
+  });
+}
+
+// ── Sheet ops ──────────────────────────────────────────────────
+async function ensureHeaders(token) {
+  const data = await sheetsGet(token, `/v4/spreadsheets/${SHEET_ID}/values/${SHEET_TAB}!1:1`);
+  if (!data.values || !data.values[0] || data.values[0].length === 0) {
+    await sheetsPost(token,
+      `/v4/spreadsheets/${SHEET_ID}/values/${SHEET_TAB}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
+      { values: [HEADERS] }
+    );
   }
 }
 
-async function updateTodoField(mailId, field, value) {
-  const existing = await getTodos();
-  const idx = existing.findIndex(t => t.mailId === mailId);
-  if (idx < 0) return;
-  const todo = { ...existing[idx], [field]: value };
-  await upsertTodo(todo);
+async function readAll(token) {
+  const data = await sheetsGet(token, `/v4/spreadsheets/${SHEET_ID}/values/${SHEET_TAB}!A2:R`);
+  const rows = data.values || [];
+  return rows.map(row => {
+    const obj = {};
+    HEADERS.forEach((h, i) => obj[h] = row[i] || '');
+    return obj;
+  }).filter(t => t.mailId && t.status !== 'archived' && t.status !== '');
 }
 
-async function deleteTodo(mailId) {
-  const sheets = await getSheets();
-  const existing = await getTodos();
-  const idx = existing.findIndex(t => t.mailId === mailId);
-  if (idx < 0) return;
-  // Clear the row
-  await sheets.spreadsheets.values.clear({
-    spreadsheetId: SHEET_ID,
-    range: `todos!A${idx + 2}:R${idx + 2}`
+async function findRowIndex(token, mailId) {
+  const data = await sheetsGet(token, `/v4/spreadsheets/${SHEET_ID}/values/${SHEET_TAB}!A:A`);
+  const rows = data.values || [];
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0] === mailId) return i + 1; // 1-based, +1 for header
+  }
+  return -1;
+}
+
+async function upsertTodo(token, todo) {
+  await ensureHeaders(token);
+  const rowIdx = await findRowIndex(token, todo.mailId);
+  const row = HEADERS.map(h => {
+    const v = todo[h];
+    if (v === undefined || v === null) return '';
+    return String(v);
   });
+  if (rowIdx > 0) {
+    await sheetsPut(token,
+      `/v4/spreadsheets/${SHEET_ID}/values/${SHEET_TAB}!A${rowIdx}?valueInputOption=RAW`,
+      { values: [row] }
+    );
+  } else {
+    await sheetsPost(token,
+      `/v4/spreadsheets/${SHEET_ID}/values/${SHEET_TAB}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
+      { values: [row] }
+    );
+  }
 }
 
-async function getPendingReminders() {
-  const todos = await getTodos();
-  const now = new Date();
-  return todos.filter(t =>
-    t.erinnerung && new Date(t.erinnerung) <= now && t.status !== "done"
+async function updateField(token, mailId, field, value) {
+  const colIdx = HEADERS.indexOf(field);
+  if (colIdx < 0) throw new Error('Unknown field: ' + field);
+  const rowIdx = await findRowIndex(token, mailId);
+  if (rowIdx < 0) return; // not found, skip
+  const col = String.fromCharCode(65 + colIdx);
+  await sheetsPut(token,
+    `/v4/spreadsheets/${SHEET_ID}/values/${SHEET_TAB}!${col}${rowIdx}?valueInputOption=RAW`,
+    { values: [[String(value)]] }
   );
 }
 
-module.exports = { getTodos, upsertTodo, updateTodoField, deleteTodo, getPendingReminders };
+async function clearRow(token, mailId) {
+  const rowIdx = await findRowIndex(token, mailId);
+  if (rowIdx < 0) return;
+  await sheetsPost(token,
+    `/v4/spreadsheets/${SHEET_ID}/values/${SHEET_TAB}!A${rowIdx}:R${rowIdx}:clear`,
+    {}
+  );
+}
+
+async function getDueReminders(token) {
+  const todos = await readAll(token);
+  const now = new Date();
+  return todos.filter(t => t.erinnerung && new Date(t.erinnerung) <= now);
+}
+
+module.exports = { getToken, readAll, upsertTodo, updateField, clearRow, getDueReminders, ensureHeaders };
